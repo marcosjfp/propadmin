@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, protectedProcedure, agentProcedure } from '../trpc.js';
 import { propertyImages, properties } from '../../drizzle/schema.js';
 import { eq, and, desc, asc } from 'drizzle-orm';
+import { createAuditLog } from './audit.js';
 
 export const imagesRouter = router({
   // Listar imagens de uma propriedade
@@ -107,6 +108,22 @@ export const imagesRouter = router({
         .orderBy(desc(propertyImages.id))
         .limit(1);
 
+      // Registrar no histórico
+      await createAuditLog({
+        ctx,
+        action: 'image_uploaded',
+        entityType: 'image',
+        entityId: newImage.id,
+        entityName: input.originalName,
+        newValue: { 
+          filename: input.filename, 
+          originalName: input.originalName,
+          propertyId: input.propertyId,
+          isPrimary: shouldBePrimary,
+        },
+        description: `Imagem "${input.originalName}" adicionada ao imóvel "${property.title}"`,
+      });
+
       return newImage;
     }),
 
@@ -147,6 +164,17 @@ export const imagesRouter = router({
         .update(propertyImages)
         .set({ isPrimary: true })
         .where(eq(propertyImages.id, input.imageId));
+
+      // Registrar no histórico
+      await createAuditLog({
+        ctx,
+        action: 'image_primary_changed',
+        entityType: 'image',
+        entityId: input.imageId,
+        entityName: image.originalName || `Imagem #${input.imageId}`,
+        newValue: { imageId: input.imageId, propertyId: image.propertyId },
+        description: `Imagem "${image.originalName || input.imageId}" definida como principal do imóvel "${property?.title || image.propertyId}"`,
+      });
 
       return { success: true };
     }),
@@ -208,6 +236,12 @@ export const imagesRouter = router({
 
       const wasPrimary = image.isPrimary;
       const propertyId = image.propertyId;
+      const imageInfo = { 
+        id: image.id, 
+        originalName: image.originalName, 
+        filename: image.filename,
+        propertyId: image.propertyId 
+      };
 
       // Deletar a imagem
       await ctx.db
@@ -230,6 +264,17 @@ export const imagesRouter = router({
             .where(eq(propertyImages.id, nextImage.id));
         }
       }
+
+      // Registrar no histórico
+      await createAuditLog({
+        ctx,
+        action: 'image_deleted',
+        entityType: 'image',
+        entityId: input.imageId,
+        entityName: image.originalName || `Imagem #${input.imageId}`,
+        previousValue: imageInfo,
+        description: `Imagem "${image.originalName || input.imageId}" removida do imóvel "${property?.title || propertyId}"`,
+      });
 
       return { success: true };
     }),

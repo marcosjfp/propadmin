@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure, adminProcedure } from '../trpc.js';
 import { users } from '../../drizzle/schema.js';
 import { eq, desc } from 'drizzle-orm';
+import { createAuditLog } from './audit.js';
 
 export const usersRouter = router({
   // Get current logged-in user
@@ -103,10 +104,31 @@ export const usersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
       
+      // Buscar usuário atual para log
+      const [currentUser] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.id, id))
+        .limit(1);
+      
       await ctx.db
         .update(users)
         .set(updateData)
         .where(eq(users.id, id));
+
+      // Registrar no histórico
+      if (currentUser) {
+        await createAuditLog({
+          ctx,
+          action: 'user_role_changed',
+          entityType: 'user',
+          entityId: id,
+          entityName: currentUser.name || currentUser.email || `User #${id}`,
+          previousValue: { role: currentUser.role, isAgent: currentUser.isAgent },
+          newValue: updateData,
+          description: `Papel do usuário "${currentUser.name || currentUser.email}" alterado de "${currentUser.role}" para "${updateData.role}"`,
+        });
+      }
 
       return { success: true };
     }),
@@ -115,9 +137,29 @@ export const usersRouter = router({
   delete: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      // Buscar usuário antes de deletar para log
+      const [userToDelete] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.id, input.id))
+        .limit(1);
+      
       await ctx.db
         .delete(users)
         .where(eq(users.id, input.id));
+
+      // Registrar no histórico
+      if (userToDelete) {
+        await createAuditLog({
+          ctx,
+          action: 'user_deleted',
+          entityType: 'user',
+          entityId: input.id,
+          entityName: userToDelete.name || userToDelete.email || `User #${input.id}`,
+          previousValue: userToDelete,
+          description: `Usuário "${userToDelete.name || userToDelete.email}" excluído`,
+        });
+      }
 
       return { success: true };
     }),
@@ -138,6 +180,13 @@ export const usersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
       
+      // Buscar usuário atual para log
+      const [currentUser] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.id, id))
+        .limit(1);
+      
       // Se mudar para agent, atualizar isAgent também
       if (updateData.role === 'agent') {
         updateData.isAgent = true;
@@ -151,6 +200,23 @@ export const usersRouter = router({
         .set(updateData)
         .where(eq(users.id, id));
 
+      // Registrar no histórico
+      if (currentUser) {
+        const roleChanged = updateData.role && updateData.role !== currentUser.role;
+        await createAuditLog({
+          ctx,
+          action: roleChanged ? 'user_role_changed' : 'user_updated',
+          entityType: 'user',
+          entityId: id,
+          entityName: currentUser.name || currentUser.email || `User #${id}`,
+          previousValue: currentUser,
+          newValue: updateData,
+          description: roleChanged 
+            ? `Papel do usuário "${currentUser.name || currentUser.email}" alterado de "${currentUser.role}" para "${updateData.role}"`
+            : `Usuário "${currentUser.name || currentUser.email}" atualizado`,
+        });
+      }
+
       return { success: true };
     }),
 
@@ -163,6 +229,13 @@ export const usersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Buscar usuário atual para log
+      const [currentUser] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.id, input.id))
+        .limit(1);
+      
       await ctx.db
         .update(users)
         .set({
@@ -171,6 +244,20 @@ export const usersRouter = router({
           creci: input.creci,
         })
         .where(eq(users.id, input.id));
+
+      // Registrar no histórico
+      if (currentUser) {
+        await createAuditLog({
+          ctx,
+          action: 'user_role_changed',
+          entityType: 'user',
+          entityId: input.id,
+          entityName: currentUser.name || currentUser.email || `User #${input.id}`,
+          previousValue: { role: currentUser.role, isAgent: currentUser.isAgent },
+          newValue: { role: 'agent', isAgent: true, creci: input.creci },
+          description: `Usuário "${currentUser.name || currentUser.email}" promovido a corretor com CRECI ${input.creci}`,
+        });
+      }
 
       return { success: true };
     }),

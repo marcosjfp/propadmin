@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, protectedProcedure, agentProcedure, adminProcedure } from '../trpc.js';
 import { commissions, properties, users } from '../../drizzle/schema.js';
 import { eq, desc } from 'drizzle-orm';
+import { createAuditLog } from './audit.js';
 
 export const commissionsRouter = router({
   // List all commissions (admin only)
@@ -79,6 +80,13 @@ export const commissionsRouter = router({
       // Calculate commission amount
       const commissionAmount = Math.floor((input.transactionAmount * input.commissionRate) / 10000);
 
+      // Buscar info da propriedade para o log
+      const [property] = await ctx.db
+        .select()
+        .from(properties)
+        .where(eq(properties.id, input.propertyId))
+        .limit(1);
+
       await ctx.db
         .insert(commissions)
         .values({
@@ -99,6 +107,17 @@ export const commissionsRouter = router({
         .orderBy(desc(commissions.id))
         .limit(1);
       
+      // Registrar no histórico
+      await createAuditLog({
+        ctx,
+        action: 'commission_created',
+        entityType: 'commission',
+        entityId: commission.id,
+        entityName: property?.title || `Propriedade #${input.propertyId}`,
+        newValue: { ...input, commissionAmount, id: commission.id },
+        description: `Comissão de R$ ${(commissionAmount / 100).toFixed(2)} criada para ${input.transactionType} do imóvel "${property?.title || input.propertyId}"`,
+      });
+      
       return { id: commission.id };
     }),
 
@@ -114,10 +133,41 @@ export const commissionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
       
+      // Buscar comissão atual para log
+      const [currentCommission] = await ctx.db
+        .select({
+          commission: commissions,
+          property: properties,
+        })
+        .from(commissions)
+        .leftJoin(properties, eq(commissions.propertyId, properties.id))
+        .where(eq(commissions.id, id))
+        .limit(1);
+      
       await ctx.db
         .update(commissions)
         .set(updateData)
         .where(eq(commissions.id, id));
+
+      // Registrar no histórico
+      if (currentCommission) {
+        const actionMap: Record<string, any> = {
+          'paga': 'commission_paid',
+          'cancelada': 'commission_cancelled',
+        };
+        const action = actionMap[input.status] || 'commission_status_changed';
+        
+        await createAuditLog({
+          ctx,
+          action,
+          entityType: 'commission',
+          entityId: id,
+          entityName: currentCommission.property?.title || `Comissão #${id}`,
+          previousValue: { status: currentCommission.commission.status },
+          newValue: { status: input.status, paymentDate: input.paymentDate },
+          description: `Status da comissão do imóvel "${currentCommission.property?.title}" alterado de "${currentCommission.commission.status}" para "${input.status}"`,
+        });
+      }
 
       return { success: true };
     }),
@@ -126,9 +176,33 @@ export const commissionsRouter = router({
   delete: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      // Buscar comissão atual para log
+      const [currentCommission] = await ctx.db
+        .select({
+          commission: commissions,
+          property: properties,
+        })
+        .from(commissions)
+        .leftJoin(properties, eq(commissions.propertyId, properties.id))
+        .where(eq(commissions.id, input.id))
+        .limit(1);
+
       await ctx.db
         .delete(commissions)
         .where(eq(commissions.id, input.id));
+
+      // Registrar no histórico
+      if (currentCommission) {
+        await createAuditLog({
+          ctx,
+          action: 'commission_cancelled',
+          entityType: 'commission',
+          entityId: input.id,
+          entityName: currentCommission.property?.title || `Comissão #${input.id}`,
+          previousValue: currentCommission.commission,
+          description: `Comissão #${input.id} do imóvel "${currentCommission.property?.title || 'N/A'}" foi excluída`,
+        });
+      }
 
       return { success: true };
     }),

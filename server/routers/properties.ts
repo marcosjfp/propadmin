@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, publicProcedure, agentProcedure, adminProcedure } from '../trpc.js';
 import { users, properties as propertiesSchema } from '../../drizzle/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
+import { createAuditLog } from './audit.js';
 
 export const propertiesRouter = router({
   // List all active properties with agent info (public)
@@ -138,6 +139,18 @@ export const propertiesRouter = router({
           .limit(1);
         
         console.log("Property created:", property);
+        
+        // Registrar no histórico
+        await createAuditLog({
+          ctx,
+          action: 'property_created',
+          entityType: 'property',
+          entityId: property.id,
+          entityName: property.title,
+          newValue: { ...input, id: property.id },
+          description: `Imóvel "${property.title}" criado em ${property.city}/${property.state}`,
+        });
+        
         return { id: property.id };
       } catch (error) {
         console.error("Error creating property:", error);
@@ -187,10 +200,45 @@ export const propertiesRouter = router({
         throw new Error('Propriedade não encontrada ou você não tem permissão para editá-la');
       }
 
+      // Detectar mudança de status
+      const statusChanged = updateData.status && updateData.status !== property.status;
+      const previousStatus = property.status;
+
       await ctx.db
         .update(propertiesSchema)
         .set(updateData)
         .where(eq(propertiesSchema.id, id));
+
+      // Registrar no histórico
+      if (statusChanged) {
+        const actionMap: Record<string, any> = {
+          'vendida': 'property_sold',
+          'alugada': 'property_rented',
+        };
+        const action = actionMap[updateData.status!] || 'property_status_changed';
+        
+        await createAuditLog({
+          ctx,
+          action,
+          entityType: 'property',
+          entityId: id,
+          entityName: property.title,
+          previousValue: { status: previousStatus },
+          newValue: { status: updateData.status },
+          description: `Status do imóvel "${property.title}" alterado de "${previousStatus}" para "${updateData.status}"`,
+        });
+      } else {
+        await createAuditLog({
+          ctx,
+          action: 'property_updated',
+          entityType: 'property',
+          entityId: id,
+          entityName: property.title,
+          previousValue: property,
+          newValue: updateData,
+          description: `Imóvel "${property.title}" atualizado`,
+        });
+      }
 
       return { success: true };
     }),
@@ -218,6 +266,17 @@ export const propertiesRouter = router({
       await ctx.db
         .delete(propertiesSchema)
         .where(eq(propertiesSchema.id, input.id));
+
+      // Registrar no histórico
+      await createAuditLog({
+        ctx,
+        action: 'property_deleted',
+        entityType: 'property',
+        entityId: input.id,
+        entityName: property.title,
+        previousValue: property,
+        description: `Imóvel "${property.title}" excluído`,
+      });
 
       return { success: true };
     }),
