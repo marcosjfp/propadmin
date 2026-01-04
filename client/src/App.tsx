@@ -13,6 +13,7 @@ import Profile from "./pages/Profile";
 import AdminDashboard from "./pages/AdminDashboard";
 import AgentDashboard from "./pages/AgentDashboard";
 import PropertyDetails from "./pages/PropertyDetails";
+import AuditHistory from "./pages/AuditHistory";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/meu-dashboard" component={AgentDashboard} />
       <Route path="/imovel/:id" component={PropertyDetails} />
+      <Route path="/historico" component={AuditHistory} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

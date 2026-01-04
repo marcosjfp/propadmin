@@ -26,7 +26,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Link } from "wouter";
-import { ArrowLeft, Users, Building2, DollarSign, CheckCircle, Clock, XCircle, UserPlus, Trash2, Edit2, TrendingUp, Calendar, FileText, Download } from "lucide-react";
+import { ArrowLeft, Users, Building2, DollarSign, CheckCircle, Clock, XCircle, UserPlus, Trash2, Edit2, TrendingUp, Calendar, FileText, Download, History } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminDashboard() {
@@ -245,14 +245,22 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow">
-        <div className="container mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Voltar
+              </Button>
+            </Link>
+            <h1 className="text-2xl font-bold text-gray-900">Painel Administrativo</h1>
+          </div>
+          <Link href="/historico">
+            <Button variant="outline" size="sm">
+              <History className="h-4 w-4 mr-2" />
+              Histórico de Auditoria
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Painel Administrativo</h1>
         </div>
       </div>
 

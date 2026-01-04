@@ -89,3 +89,64 @@ export const propertyImages = mysqlTable("property_images", {
 export type PropertyImage = typeof propertyImages.$inferSelect;
 export type InsertPropertyImage = typeof propertyImages.$inferInsert;
 
+/**
+ * Tabela de histórico/auditoria - rastreia todas as ações importantes do sistema
+ */
+export const auditLogs = mysqlTable("audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // Quem fez a ação
+  userId: int("userId").references(() => users.id, { onDelete: "set null" }),
+  userName: varchar("userName", { length: 255 }), // Armazenado para caso o usuário seja deletado
+  userRole: varchar("userRole", { length: 50 }),
+  
+  // O que foi feito
+  action: mysqlEnum("action", [
+    // Usuários
+    "user_created",
+    "user_updated", 
+    "user_deleted",
+    "user_role_changed",
+    "user_login",
+    "user_logout",
+    
+    // Propriedades
+    "property_created",
+    "property_updated",
+    "property_deleted",
+    "property_status_changed",
+    "property_sold",
+    "property_rented",
+    
+    // Imagens
+    "image_uploaded",
+    "image_deleted",
+    "image_primary_changed",
+    
+    // Comissões
+    "commission_created",
+    "commission_status_changed",
+    "commission_paid",
+    "commission_cancelled"
+  ]).notNull(),
+  
+  // Em qual entidade
+  entityType: mysqlEnum("entityType", ["user", "property", "commission", "image"]).notNull(),
+  entityId: int("entityId"), // ID da entidade afetada
+  entityName: varchar("entityName", { length: 255 }), // Nome/título para referência
+  
+  // Detalhes da mudança
+  previousValue: text("previousValue"), // JSON com valores anteriores
+  newValue: text("newValue"), // JSON com novos valores
+  description: text("description"), // Descrição legível da ação
+  
+  // Metadados
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
