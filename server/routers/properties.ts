@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure, protectedProcedure, agentProcedure, adminProcedure } from '../trpc.js';
+import { router, publicProcedure, agentProcedure, adminProcedure } from '../trpc.js';
 import { users, properties as propertiesSchema } from '../../drizzle/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 

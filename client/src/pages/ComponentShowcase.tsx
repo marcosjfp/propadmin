@@ -159,7 +159,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useTheme } from "@/contexts/ThemeContext";
 import { format } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { ptBR } from "date-fns/locale";
 import {
   AlertCircle,
   CalendarIcon,
@@ -176,7 +176,7 @@ export default function ComponentsShowcase() {
   const { theme, toggleTheme } = useTheme();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [datePickerDate, setDatePickerDate] = useState<Date>();
-  const [selectedFruits, setSelectedFruits] = useState<string[]>([]);
+  const [_selectedFruits, _setSelectedFruits] = useState<string[]>([]);
   const [progress, setProgress] = useState(33);
   const [currentPage, setCurrentPage] = useState(2);
   const [openCombobox, setOpenCombobox] = useState(false);
@@ -458,7 +458,7 @@ export default function ComponentsShowcase() {
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {datePickerDate ? (
-                          format(datePickerDate, "PPP HH:mm", { locale: zhCN })
+                          format(datePickerDate, "PPP HH:mm", { locale: ptBR })
                         ) : (
                           <span>Select date and time</span>
                         )}
@@ -504,7 +504,7 @@ export default function ComponentsShowcase() {
                     <p className="text-sm text-muted-foreground">
                       Selected:{" "}
                       {format(datePickerDate, "yyyy/MM/dd  HH:mm", {
-                        locale: zhCN,
+                        locale: ptBR,
                       })}
                     </p>
                   )}
@@ -551,7 +551,7 @@ export default function ComponentsShowcase() {
                               <CommandItem
                                 key={framework.value}
                                 value={framework.value}
-                                onSelect={currentValue => {
+                                onSelect={(currentValue: string) => {
                                   setSelectedFramework(
                                     currentValue === selectedFramework
                                       ? ""

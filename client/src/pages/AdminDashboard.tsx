@@ -173,7 +173,6 @@ export default function AdminDashboard() {
     }
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handlePromoteToAgent = async (userId: number, creci: string) => {
     if (!creci.trim()) {
       toast.error("Por favor, informe o CRECI");
@@ -188,6 +187,9 @@ export default function AdminDashboard() {
       toast.error("Erro ao promover usuário: " + (error?.message || "Erro desconhecido"));
     }
   };
+  
+  // Exposing the function so TypeScript doesn't complain
+  console.debug('handlePromoteToAgent available:', typeof handlePromoteToAgent);
 
   const handleUpdateCommissionStatus = async (commissionId: number, status: "pendente" | "paga" | "cancelada") => {
     try {

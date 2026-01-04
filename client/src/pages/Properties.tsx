@@ -909,7 +909,7 @@ export default function Properties() {
               propertyId={imagePropertyId} 
               onImagesChange={() => {
                 // Refetch property data if needed
-                refetch();
+                propertiesQuery.refetch();
               }}
             />
           )}

@@ -21,7 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import { ArrowLeft, Trash2, Shield, UserCheck } from "lucide-react";
+import { ArrowLeft, Trash2, UserCheck } from "lucide-react";
 
 export default function Users() {
   const { user } = useAuth();
