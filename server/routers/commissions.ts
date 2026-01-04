@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure, agentProcedure, adminProcedure } from '../trpc.js';
 import { commissions, properties, users } from '../../drizzle/schema.js';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 export const commissionsRouter = router({
   // List all commissions (admin only)

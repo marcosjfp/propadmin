@@ -6,7 +6,7 @@ import { Link } from "wouter";
 import { ArrowLeft, CheckCircle, Clock, XCircle } from "lucide-react";
 
 export default function MyCommissions() {
-  const { user } = useAuth();
+  const { } = useAuth();
   const commissionsQuery = trpc.commissions.myCommissions.useQuery();
 
   const formatPrice = (price: number) => {
