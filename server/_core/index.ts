@@ -13,9 +13,19 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+console.log('🚀 Starting server initialization...');
+console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`🔌 PORT: ${process.env.PORT || 3000}`);
+
 const app = express();
 const port = process.env.PORT || 3000;
 const host = '0.0.0.0'; // Necessário para Railway e outros cloud providers
+
+// Health check endpoint PRIMEIRO - antes de qualquer middleware
+app.get('/api/health', (req, res) => {
+  console.log('🏥 Health check requested');
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Middleware
 app.use(cors({
@@ -33,11 +43,6 @@ app.use(
     createContext,
   })
 );
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
 
 // Development login endpoint - Creates a mock authenticated session
 app.get('/api/dev-login', (req, res) => {
@@ -255,31 +260,30 @@ if (process.env.NODE_ENV === 'production') {
 
 // Start server
 async function startServer() {
-  // Test database connection
-  const dbConnected = await testConnection();
+  console.log('🔄 Starting HTTP server...');
   
-  if (!dbConnected) {
-    console.log('⚠️  Starting server without database connection');
-    console.log('💡 Verifique as variáveis de ambiente do banco de dados');
-    console.log('');
-  }
-
-  // Escutar em 0.0.0.0 para funcionar no Railway/Docker
-  app.listen(Number(port), host, () => {
+  // Iniciar o servidor PRIMEIRO para passar no health check
+  const server = app.listen(Number(port), host, () => {
     console.log('');
     console.log('========================================');
     console.log(`✅ Server running on http://${host}:${port}`);
     console.log(`📡 tRPC endpoint: /trpc`);
     console.log(`🏥 Health check: /api/health`);
-    if (dbConnected) {
-      console.log(`💾 Database: Connected to MySQL`);
-    } else {
-      console.log(`⚠️  Database: NOT connected`);
-    }
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log('========================================');
     console.log('');
   });
+
+  // Testar conexão com banco DEPOIS do servidor iniciar
+  console.log('🔄 Testing database connection...');
+  const dbConnected = await testConnection();
+  
+  if (dbConnected) {
+    console.log('💾 Database: Connected to MySQL');
+  } else {
+    console.log('⚠️  Database: NOT connected - some features may not work');
+    console.log('💡 Verifique as variáveis de ambiente do banco de dados');
+  }
 }
 
 startServer().catch((error) => {
