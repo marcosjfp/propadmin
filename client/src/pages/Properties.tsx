@@ -72,7 +72,9 @@ export default function Properties() {
     status: "ativa" as "ativa" | "vendida" | "alugada" | "inativa",
   });
 
-  const propertiesQuery = user?.role === "agent" ? trpc.properties.myProperties.useQuery() : trpc.properties.list.useQuery();
+  const propertiesQuery = user?.role === "agent" 
+    ? trpc.properties.myProperties.useQuery() 
+    : trpc.properties.listAll.useQuery();
   const createMutation = trpc.properties.create.useMutation();
   const updateMutation = trpc.properties.update.useMutation();
   const deleteMutation = trpc.properties.delete.useMutation();

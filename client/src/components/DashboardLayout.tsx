@@ -19,9 +19,9 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Home as HomeIcon } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -63,11 +63,9 @@ export default function DashboardLayout({
           <div className="flex flex-col items-center gap-6">
             <div className="relative group">
               <div className="relative">
-                <img
-                  src={APP_LOGO}
-                  alt={APP_TITLE}
-                  className="h-20 w-20 rounded-xl object-cover shadow"
-                />
+                <div className="h-20 w-20 rounded-xl bg-blue-600 shadow flex items-center justify-center">
+                  <HomeIcon className="h-12 w-12 text-white" />
+                </div>
               </div>
             </div>
             <div className="text-center space-y-2">
@@ -172,11 +170,9 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-3 pl-2 group-data-[collapsible=icon]:px-0 transition-all w-full">
               {isCollapsed ? (
                 <div className="relative h-8 w-8 shrink-0 group">
-                  <img
-                    src={APP_LOGO}
-                    className="h-8 w-8 rounded-md object-cover ring-1 ring-border"
-                    alt="Logo"
-                  />
+                  <div className="h-8 w-8 rounded-md bg-blue-600 ring-1 ring-border flex items-center justify-center">
+                    <HomeIcon className="h-5 w-5 text-white" />
+                  </div>
                   <button
                     onClick={toggleSidebar}
                     className="absolute inset-0 flex items-center justify-center bg-accent rounded-md ring-1 ring-border opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -187,11 +183,9 @@ function DashboardLayoutContent({
               ) : (
                 <>
                   <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={APP_LOGO}
-                      className="h-8 w-8 rounded-md object-cover ring-1 ring-border shrink-0"
-                      alt="Logo"
-                    />
+                    <div className="h-8 w-8 rounded-md bg-blue-600 ring-1 ring-border shrink-0 flex items-center justify-center">
+                      <HomeIcon className="h-5 w-5 text-white" />
+                    </div>
                     <span className="font-semibold tracking-tight truncate">
                       {APP_TITLE}
                     </span>
