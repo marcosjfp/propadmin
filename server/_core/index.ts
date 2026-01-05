@@ -15,10 +15,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3000;
+const host = '0.0.0.0'; // Necessário para Railway e outros cloud providers
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? true : 'http://localhost:5173'),
   credentials: true,
 }));
 app.use(express.json());
@@ -259,30 +260,25 @@ async function startServer() {
   
   if (!dbConnected) {
     console.log('⚠️  Starting server without database connection');
-    console.log('💡 To set up the database:');
-    console.log('   1. Start Docker Desktop');
-    console.log('   2. Run: docker run --name mysql-admin-propriedades -e MYSQL_ROOT_PASSWORD=rootpass123 -e MYSQL_DATABASE=administrador_de_propriedades -p 3307:3306 -d mysql:8.0');
-    console.log('   3. Wait 30 seconds for MySQL to start');
+    console.log('💡 Verifique as variáveis de ambiente do banco de dados');
     console.log('');
   }
 
-  app.listen(port, () => {
+  // Escutar em 0.0.0.0 para funcionar no Railway/Docker
+  app.listen(Number(port), host, () => {
     console.log('');
     console.log('========================================');
-    console.log(`✅ Server running on http://localhost:${port}`);
-    console.log(`📡 tRPC endpoint: http://localhost:${port}/trpc`);
-    console.log(`🏥 Health check: http://localhost:${port}/api/health`);
+    console.log(`✅ Server running on http://${host}:${port}`);
+    console.log(`📡 tRPC endpoint: /trpc`);
+    console.log(`🏥 Health check: /api/health`);
     if (dbConnected) {
       console.log(`💾 Database: Connected to MySQL`);
+    } else {
+      console.log(`⚠️  Database: NOT connected`);
     }
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log('========================================');
     console.log('');
-    
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('💡 Client dev server should be running on http://localhost:5173');
-      console.log('   If not started, run: pnpm --dir client dev');
-      console.log('');
-    }
   });
 }
 
