@@ -1,74 +1,36 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { APP_TITLE, getLoginUrl } from "@/const";
 import { Link } from "wouter";
-import { Building2, Users, BarChart3, LogOut, Settings, LayoutDashboard } from "lucide-react";
+import { Building2, Users, BarChart3, LogOut, Settings, LayoutDashboard, Home as HomeIcon } from "lucide-react";
+import { useEffect } from "react";
 
 export default function Home() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, loading, logout } = useAuth();
 
-  if (!isAuthenticated) {
+  // Redirecionar para página de login automaticamente quando não autenticado
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
+      if (!oauthPortalUrl || oauthPortalUrl === "") {
+        window.location.href = "http://localhost:3000/api/dev-login-page";
+      } else {
+        window.location.href = getLoginUrl();
+      }
+    }
+  }, [loading, isAuthenticated]);
+
+  // Mostrar loading enquanto verifica autenticação
+  if (loading || !isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="container mx-auto px-4 py-20">
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="mb-8">
-              {APP_LOGO && <img src={APP_LOGO} alt={APP_TITLE} className="h-16 mx-auto mb-4" />}
-              <h1 className="text-5xl font-bold text-gray-900 mb-4">{APP_TITLE}</h1>
-              <p className="text-xl text-gray-600 mb-8">
-                Gerencie suas propriedades imobiliárias com facilidade e acompanhe suas comissões em tempo real
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-6 mb-12">
-              <Card>
-                <CardHeader>
-                  <Building2 className="h-8 w-8 text-blue-600 mb-2" />
-                  <CardTitle>Imóveis</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600">Cadastre e gerencie imóveis para venda ou aluguel</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <Users className="h-8 w-8 text-blue-600 mb-2" />
-                  <CardTitle>Corretores</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600">Gerencie corretores de imóveis e suas responsabilidades</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <BarChart3 className="h-8 w-8 text-blue-600 mb-2" />
-                  <CardTitle>Comissões</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600">Acompanhe comissões de venda (8%) e locação (10%)</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Button
-              size="lg"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg"
-              onClick={() => {
-                // Use dev-login endpoint if OAuth is not configured
-                const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
-                if (!oauthPortalUrl || oauthPortalUrl === "") {
-                  window.location.href = "http://localhost:3000/api/dev-login";
-                } else {
-                  window.location.href = getLoginUrl();
-                }
-              }}
-            >
-              Acessar Plataforma
-            </Button>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="bg-blue-600 rounded-2xl p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+            <HomeIcon className="h-12 w-12 text-white" />
           </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{APP_TITLE}</h1>
+          <p className="text-gray-600">Redirecionando para login...</p>
         </div>
       </div>
     );
@@ -79,7 +41,9 @@ export default function Home() {
       <nav className="bg-white shadow">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            {APP_LOGO && <img src={APP_LOGO} alt={APP_TITLE} className="h-8" />}
+            <div className="bg-blue-600 rounded-lg p-1.5">
+              <HomeIcon className="h-5 w-5 text-white" />
+            </div>
             <h1 className="text-2xl font-bold text-gray-900">{APP_TITLE}</h1>
           </div>
           <div className="flex items-center gap-4">

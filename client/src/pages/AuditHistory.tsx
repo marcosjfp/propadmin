@@ -264,14 +264,14 @@ export default function AuditHistory() {
               <div>
                 <Label>Tipo de Entidade</Label>
                 <Select
-                  value={filters.entityType}
-                  onValueChange={(value) => setFilters({ ...filters, entityType: value })}
+                  value={filters.entityType || "all"}
+                  onValueChange={(value) => setFilters({ ...filters, entityType: value === "all" ? "" : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="all">Todos</SelectItem>
                     <SelectItem value="user">Usuários</SelectItem>
                     <SelectItem value="property">Imóveis</SelectItem>
                     <SelectItem value="commission">Comissões</SelectItem>

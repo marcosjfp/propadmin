@@ -73,30 +73,169 @@ app.get('/api/dev-login', (req, res) => {
 app.get('/api/dev-login-page', (req, res) => {
   res.send(`
     <!DOCTYPE html>
-    <html>
+    <html lang="pt-BR">
     <head>
-      <title>Dev Login</title>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Login - Administrador de Propriedades</title>
       <style>
-        body { font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
-        .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
-        h1 { color: #333; margin-bottom: 30px; }
-        .buttons { display: flex; flex-direction: column; gap: 15px; }
-        a { display: block; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; transition: transform 0.2s; }
-        a:hover { transform: scale(1.05); }
-        .agent { background: #3b82f6; color: white; }
-        .admin { background: #8b5cf6; color: white; }
-        .user { background: #6b7280; color: white; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 20px;
+        }
+        .login-container {
+          background: white;
+          padding: 50px;
+          border-radius: 20px;
+          box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+          max-width: 450px;
+          width: 100%;
+          text-align: center;
+        }
+        .logo {
+          font-size: 48px;
+          margin-bottom: 10px;
+        }
+        h1 {
+          color: #1f2937;
+          font-size: 28px;
+          margin-bottom: 10px;
+          font-weight: 700;
+        }
+        .subtitle {
+          color: #6b7280;
+          font-size: 16px;
+          margin-bottom: 40px;
+        }
+        .role-section {
+          margin-bottom: 30px;
+        }
+        .role-label {
+          color: #374151;
+          font-size: 14px;
+          font-weight: 600;
+          text-align: left;
+          margin-bottom: 15px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .login-btn {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          width: 100%;
+          padding: 18px 25px;
+          margin-bottom: 15px;
+          text-decoration: none;
+          border-radius: 12px;
+          font-weight: 600;
+          font-size: 16px;
+          transition: all 0.3s ease;
+          border: 2px solid transparent;
+        }
+        .login-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+        }
+        .login-btn .icon {
+          font-size: 24px;
+        }
+        .login-btn .text {
+          flex: 1;
+          text-align: left;
+        }
+        .login-btn .description {
+          font-size: 12px;
+          font-weight: 400;
+          opacity: 0.9;
+          margin-top: 4px;
+        }
+        .login-btn .arrow {
+          font-size: 18px;
+          opacity: 0.7;
+        }
+        .corretor {
+          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+          color: white;
+        }
+        .corretor:hover {
+          background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        }
+        .admin {
+          background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+          color: white;
+        }
+        .admin:hover {
+          background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+        }
+        .divider {
+          display: flex;
+          align-items: center;
+          margin: 30px 0;
+          color: #9ca3af;
+          font-size: 12px;
+        }
+        .divider::before, .divider::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: #e5e7eb;
+        }
+        .divider span {
+          padding: 0 15px;
+        }
+        .footer {
+          color: #9ca3af;
+          font-size: 13px;
+        }
+        .footer a {
+          color: #6366f1;
+          text-decoration: none;
+        }
+        .footer a:hover {
+          text-decoration: underline;
+        }
       </style>
     </head>
     <body>
-      <div class="container">
-        <h1>🏠 Dev Login</h1>
-        <p style="color: #666; margin-bottom: 20px;">Selecione o tipo de usuário:</p>
-        <div class="buttons">
-          <a href="/api/dev-login?role=agent" class="agent">🏢 Entrar como Corretor</a>
-          <a href="/api/dev-login?role=admin" class="admin">⚙️ Entrar como Administrador</a>
-          <a href="/api/dev-login?role=user" class="user">👤 Entrar como Usuário</a>
+      <div class="login-container">
+        <div class="logo">🏠</div>
+        <h1>Bem-vindo!</h1>
+        <p class="subtitle">Administrador de Propriedades</p>
+        
+        <div class="role-section">
+          <p class="role-label">Selecione seu perfil para entrar</p>
+          
+          <a href="/api/dev-login?role=agent" class="login-btn corretor">
+            <span class="icon">🏢</span>
+            <span class="text">
+              <strong>Corretor de Imóveis</strong>
+              <div class="description">Gerencie imóveis e acompanhe suas comissões</div>
+            </span>
+            <span class="arrow">→</span>
+          </a>
+          
+          <a href="/api/dev-login?role=admin" class="login-btn admin">
+            <span class="icon">⚙️</span>
+            <span class="text">
+              <strong>Administrador</strong>
+              <div class="description">Acesso completo ao sistema e relatórios</div>
+            </span>
+            <span class="arrow">→</span>
+          </a>
         </div>
+        
+        <div class="divider"><span>Ambiente de Desenvolvimento</span></div>
+        
+        <p class="footer">
+          Sistema de gerenciamento imobiliário
+        </p>
       </div>
     </body>
     </html>

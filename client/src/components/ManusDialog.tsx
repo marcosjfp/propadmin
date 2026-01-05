@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { APP_LOGO, APP_TITLE } from "@/const";
+import { APP_TITLE } from "@/const";
 import {
   Dialog,
   DialogContent,
@@ -9,10 +9,10 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Home as HomeIcon } from "lucide-react";
 
 interface ManusDialogProps {
   title?: string;
-  logo?: string;
   open?: boolean;
   onLogin: () => void;
   onOpenChange?: (open: boolean) => void;
@@ -21,7 +21,6 @@ interface ManusDialogProps {
 
 export function ManusDialog({
   title = APP_TITLE,
-  logo = APP_LOGO,
   open = false,
   onLogin,
   onOpenChange,
@@ -54,8 +53,8 @@ export function ManusDialog({
     >
       <DialogContent className="py-5 bg-[#f8f8f7] rounded-[20px] w-[400px] shadow-[0px_4px_11px_0px_rgba(0,0,0,0.08)] border border-[rgba(0,0,0,0.08)] backdrop-blur-2xl p-0 gap-0 text-center">
         <div className="flex flex-col items-center gap-2 p-5 pt-12">
-          <div className="w-16 h-16 bg-white rounded-xl border border-[rgba(0,0,0,0.08)] flex items-center justify-center">
-            <img src={logo} alt="App icon" className="w-10 h-10 rounded-md" />
+          <div className="w-16 h-16 bg-blue-600 rounded-xl border border-[rgba(0,0,0,0.08)] flex items-center justify-center">
+            <HomeIcon className="w-10 h-10 text-white" />
           </div>
 
           {/* Title and subtitle */}
