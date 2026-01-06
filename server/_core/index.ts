@@ -59,6 +59,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 const host = '0.0.0.0'; // Necessário para Railway e outros cloud providers
 
+// Trust proxy - needed for Railway and other cloud providers to detect HTTPS
+app.set('trust proxy', 1);
+
 // Health check endpoint PRIMEIRO - antes de qualquer middleware
 app.get('/api/health', (req, res) => {
   console.log('🏥 Health check requested');
@@ -102,26 +105,23 @@ app.get('/api/dev-login', (req, res) => {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
+  
+  console.log(`🔐 Setting session cookie for user: ${mockUser.name} (${mockUser.role})`);
+  
+  // Cookie settings for production
+  const isProduction = process.env.NODE_ENV === 'production';
   res.cookie(COOKIE_NAME, sessionData, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProduction,
+    sameSite: 'lax', // 'lax' works for same-site redirects
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+    path: '/',
   });
 
-  // Redirect back to home page - detect URL automatically
-  let redirectUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-  
-  // In production, use the request's origin or host
-  if (process.env.NODE_ENV === 'production' && !process.env.CLIENT_URL) {
-    const protocol = req.headers['x-forwarded-proto'] || 'https';
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    if (host) {
-      redirectUrl = `${protocol}://${host}`;
-    }
-  }
-  
-  res.redirect(redirectUrl);
+  // In production, redirect to root path (relative redirect)
+  // This ensures the cookie domain matches
+  console.log(`🔄 Redirecting to /`);
+  res.redirect('/');
 });
 
 // Dev login page with role selection
