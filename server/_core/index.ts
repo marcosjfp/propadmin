@@ -109,8 +109,19 @@ app.get('/api/dev-login', (req, res) => {
     maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
   });
 
-  // Redirect back to home page
-  res.redirect(process.env.CLIENT_URL || 'http://localhost:5173');
+  // Redirect back to home page - detect URL automatically
+  let redirectUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  
+  // In production, use the request's origin or host
+  if (process.env.NODE_ENV === 'production' && !process.env.CLIENT_URL) {
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    if (host) {
+      redirectUrl = `${protocol}://${host}`;
+    }
+  }
+  
+  res.redirect(redirectUrl);
 });
 
 // Dev login page with role selection
