@@ -68,6 +68,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Debug endpoint to check environment variables (remove in production later)
+app.get('/api/debug-env', (req, res) => {
+  res.json({
+    NODE_ENV: process.env.NODE_ENV,
+    DB_HOST: process.env.DB_HOST ? '✅ SET' : '❌ NOT SET',
+    DB_PORT: process.env.DB_PORT ? '✅ SET' : '❌ NOT SET',
+    DB_USER: process.env.DB_USER ? '✅ SET' : '❌ NOT SET',
+    DB_PASSWORD: process.env.DB_PASSWORD ? '✅ SET (hidden)' : '❌ NOT SET',
+    DB_NAME: process.env.DB_NAME ? '✅ SET' : '❌ NOT SET',
+    MYSQL_HOST: process.env.MYSQL_HOST ? '✅ SET' : '❌ NOT SET',
+    MYSQLHOST: process.env.MYSQLHOST ? '✅ SET' : '❌ NOT SET',
+    DATABASE_URL: process.env.DATABASE_URL ? '✅ SET' : '❌ NOT SET',
+    // Show actual DB_HOST value (first 5 chars only for security)
+    DB_HOST_preview: process.env.DB_HOST ? process.env.DB_HOST.substring(0, 10) + '...' : 'not set',
+  });
+});
+
 // Middleware
 app.use(cors({
   origin: process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? true : 'http://localhost:5173'),
