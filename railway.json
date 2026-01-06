@@ -5,7 +5,7 @@
     "buildCommand": "pnpm run build"
   },
   "deploy": {
-    "startCommand": "pnpm run start",
+    "startCommand": "pnpm exec tsx server/_core/index.ts",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 600,
     "restartPolicyType": "ON_FAILURE",
