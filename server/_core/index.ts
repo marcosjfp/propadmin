@@ -9,6 +9,7 @@ import { testConnection } from '../db.js';
 import { COOKIE_NAME } from '../../shared/const.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -250,7 +251,25 @@ app.get('/api/dev-login-page', (req, res) => {
 
 // Serve static files from the client dist folder in production
 if (process.env.NODE_ENV === 'production') {
-  const clientDistPath = path.join(__dirname, '../../client/dist');
+  // Try multiple possible paths for the client dist folder
+  const possiblePaths = [
+    path.join(__dirname, '../../client/dist'),
+    path.join(process.cwd(), 'client/dist'),
+    path.join(process.cwd(), 'dist'),
+    '/app/client/dist',
+  ];
+  
+  let clientDistPath = possiblePaths[0];
+  
+  // Find the first path that exists
+  for (const p of possiblePaths) {
+    if (fs.existsSync(path.join(p, 'index.html'))) {
+      clientDistPath = p;
+      console.log(`📂 Serving static files from: ${clientDistPath}`);
+      break;
+    }
+  }
+  
   app.use(express.static(clientDistPath));
   
   app.get('*', (req, res) => {
