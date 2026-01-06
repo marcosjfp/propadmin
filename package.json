@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "pnpm exec tsx watch server/_core/index.ts",
     "start": "node --import tsx server/_core/index.ts",
-    "build": "cd client && npm install && npm run build",
+    "build": "cd client && pnpm install && pnpm run build",
     "postinstall": "echo 'Skipping postinstall'",
     "client-dev": "pnpm --dir client dev",
     "client-build": "pnpm --dir client build",
