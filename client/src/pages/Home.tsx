@@ -14,7 +14,8 @@ export default function Home() {
     if (!loading && !isAuthenticated) {
       const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
       if (!oauthPortalUrl || oauthPortalUrl === "") {
-        window.location.href = "http://localhost:3000/api/dev-login-page";
+        // Use relative URL - works in both dev (with proxy) and production
+        window.location.href = "/api/dev-login-page";
       } else {
         window.location.href = getLoginUrl();
       }
