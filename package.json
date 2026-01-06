@@ -9,9 +9,9 @@
   },
   "scripts": {
     "dev": "pnpm exec tsx watch server/_core/index.ts",
-    "start": "npx tsx server/_core/index.ts",
-    "build": "pnpm --dir client install && pnpm --dir client build",
-    "postinstall": "pnpm run build || true",
+    "start": "node --import tsx server/_core/index.ts",
+    "build": "cd client && npm install && npm run build",
+    "postinstall": "echo 'Skipping postinstall'",
     "client-dev": "pnpm --dir client dev",
     "client-build": "pnpm --dir client build",
     "type-check": "tsc --noEmit",

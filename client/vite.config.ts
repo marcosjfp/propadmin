@@ -13,8 +13,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true, // Expõe o servidor na rede local (0.0.0.0)
     proxy: {
       '/trpc': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
