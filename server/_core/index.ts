@@ -18,6 +18,43 @@ console.log('🚀 Starting server initialization...');
 console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
 console.log(`🔌 PORT: ${process.env.PORT || 3000}`);
 
+// Detect static files path early
+const possibleStaticPaths = [
+  path.join(process.cwd(), 'client', 'dist'),
+  '/app/client/dist',
+  path.join(__dirname, '..', '..', 'client', 'dist'),
+];
+
+let staticFilesPath: string | null = null;
+console.log('🔍 Looking for static files...');
+console.log(`   CWD: ${process.cwd()}`);
+console.log(`   __dirname: ${__dirname}`);
+
+for (const p of possibleStaticPaths) {
+  const indexFile = path.join(p, 'index.html');
+  const exists = fs.existsSync(indexFile);
+  console.log(`   Checking: ${indexFile} - ${exists ? '✅ FOUND' : '❌ not found'}`);
+  if (exists && !staticFilesPath) {
+    staticFilesPath = p;
+  }
+}
+
+if (staticFilesPath) {
+  console.log(`📂 Will serve static files from: ${staticFilesPath}`);
+} else {
+  console.log('⚠️  No static files found!');
+  // List directory contents for debugging
+  try {
+    console.log(`   Contents of ${process.cwd()}:`, fs.readdirSync(process.cwd()));
+    const clientPath = path.join(process.cwd(), 'client');
+    if (fs.existsSync(clientPath)) {
+      console.log(`   Contents of ${clientPath}:`, fs.readdirSync(clientPath));
+    }
+  } catch (e) {
+    console.log('   Could not list directories');
+  }
+}
+
 const app = express();
 const port = process.env.PORT || 3000;
 const host = '0.0.0.0'; // Necessário para Railway e outros cloud providers
@@ -249,68 +286,30 @@ app.get('/api/dev-login-page', (req, res) => {
   `);
 });
 
-// Serve static files from the client dist folder in production
-if (process.env.NODE_ENV === 'production') {
-  console.log('🔍 Looking for static files...');
-  console.log(`   __dirname: ${__dirname}`);
-  console.log(`   process.cwd(): ${process.cwd()}`);
+// Serve static files - use the path detected at startup
+if (staticFilesPath) {
+  console.log(`🌐 Configuring static file serving from: ${staticFilesPath}`);
+  app.use(express.static(staticFilesPath));
   
-  // Try multiple possible paths for the client dist folder
-  const possiblePaths = [
-    path.join(process.cwd(), 'client/dist'),
-    '/app/client/dist',
-    path.join(__dirname, '../../client/dist'),
-    path.resolve('./client/dist'),
-  ];
-  
-  let clientDistPath: string | null = null;
-  
-  // Find the first path that exists
-  for (const p of possiblePaths) {
-    const indexPath = path.join(p, 'index.html');
-    console.log(`   Checking: ${indexPath} - exists: ${fs.existsSync(indexPath)}`);
-    if (fs.existsSync(indexPath)) {
-      clientDistPath = p;
-      console.log(`📂 Found static files at: ${clientDistPath}`);
-      break;
-    }
-  }
-  
-  if (clientDistPath) {
-    app.use(express.static(clientDistPath));
-    
-    // Catch-all route for SPA - must be after all other routes
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(clientDistPath!, 'index.html'));
-    });
-  } else {
-    console.log('⚠️  No static files found! Available directories:');
-    try {
-      const cwdContents = fs.readdirSync(process.cwd());
-      console.log(`   CWD contents: ${cwdContents.join(', ')}`);
-      if (fs.existsSync(path.join(process.cwd(), 'client'))) {
-        const clientContents = fs.readdirSync(path.join(process.cwd(), 'client'));
-        console.log(`   client/ contents: ${clientContents.join(', ')}`);
-      }
-    } catch (e) {
-      console.log('   Could not list directories');
-    }
-    
-    // Fallback: serve a simple HTML page
-    app.get('*', (req, res) => {
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>Administrador de Propriedades</title></head>
-        <body style="font-family: sans-serif; padding: 50px; text-align: center;">
-          <h1>🏠 Administrador de Propriedades</h1>
-          <p>O servidor está funcionando, mas os arquivos do frontend não foram encontrados.</p>
-          <p><a href="/api/health">Health Check</a> | <a href="/api/dev-login-page">Login</a></p>
-        </body>
-        </html>
-      `);
-    });
-  }
+  // Catch-all route for SPA - must be after all other routes
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(staticFilesPath!, 'index.html'));
+  });
+} else {
+  // Fallback: serve a simple HTML page
+  app.get('*', (req, res) => {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Administrador de Propriedades</title></head>
+      <body style="font-family: sans-serif; padding: 50px; text-align: center;">
+        <h1>🏠 Administrador de Propriedades</h1>
+        <p>O servidor está funcionando, mas os arquivos do frontend não foram encontrados.</p>
+        <p><a href="/api/health">Health Check</a> | <a href="/api/dev-login-page">Login</a></p>
+      </body>
+      </html>
+    `);
+  });
 }
 
 // Start server
