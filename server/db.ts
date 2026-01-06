@@ -29,6 +29,7 @@ console.log('🔗 Database URL pattern:', DATABASE_URL.replace(/:[^:@]+@/, ':***
 
 // Lazy pool creation to prevent crash on startup
 let pool: mysql.Pool | null = null;
+let dbInstance: ReturnType<typeof drizzle> | null = null;
 
 function getPool(): mysql.Pool {
   if (!pool) {
@@ -43,8 +44,20 @@ function getPool(): mysql.Pool {
   return pool;
 }
 
-// Create Drizzle instance with lazy pool
-export const db = drizzle({ client: getPool(), schema, mode: 'default' });
+// Lazy Drizzle instance creation
+function getDb() {
+  if (!dbInstance) {
+    dbInstance = drizzle(getPool(), { schema, mode: 'default' });
+  }
+  return dbInstance;
+}
+
+// Export db as a proxy that lazily initializes
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+  get(_, prop) {
+    return (getDb() as any)[prop];
+  }
+});
 
 // Export pool getter for direct queries
 export { getPool as pool };
