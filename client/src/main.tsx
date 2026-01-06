@@ -37,11 +37,14 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+// Use relative URL in production, localhost in development
+const apiUrl = import.meta.env.PROD ? '/trpc' : 'http://localhost:3000/trpc';
+
 const trpcClient = trpc.createClient({
   transformer: superjson,
   links: [
     httpBatchLink({
-      url: "http://localhost:3000/trpc",
+      url: apiUrl,
       fetch(input, init) {
         return globalThis.fetch(input, {
           ...(init ?? {}),
