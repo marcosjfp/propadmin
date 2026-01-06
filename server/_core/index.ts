@@ -251,30 +251,66 @@ app.get('/api/dev-login-page', (req, res) => {
 
 // Serve static files from the client dist folder in production
 if (process.env.NODE_ENV === 'production') {
+  console.log('🔍 Looking for static files...');
+  console.log(`   __dirname: ${__dirname}`);
+  console.log(`   process.cwd(): ${process.cwd()}`);
+  
   // Try multiple possible paths for the client dist folder
   const possiblePaths = [
-    path.join(__dirname, '../../client/dist'),
     path.join(process.cwd(), 'client/dist'),
-    path.join(process.cwd(), 'dist'),
     '/app/client/dist',
+    path.join(__dirname, '../../client/dist'),
+    path.resolve('./client/dist'),
   ];
   
-  let clientDistPath = possiblePaths[0];
+  let clientDistPath: string | null = null;
   
   // Find the first path that exists
   for (const p of possiblePaths) {
-    if (fs.existsSync(path.join(p, 'index.html'))) {
+    const indexPath = path.join(p, 'index.html');
+    console.log(`   Checking: ${indexPath} - exists: ${fs.existsSync(indexPath)}`);
+    if (fs.existsSync(indexPath)) {
       clientDistPath = p;
-      console.log(`📂 Serving static files from: ${clientDistPath}`);
+      console.log(`📂 Found static files at: ${clientDistPath}`);
       break;
     }
   }
   
-  app.use(express.static(clientDistPath));
-  
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(clientDistPath, 'index.html'));
-  });
+  if (clientDistPath) {
+    app.use(express.static(clientDistPath));
+    
+    // Catch-all route for SPA - must be after all other routes
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(clientDistPath!, 'index.html'));
+    });
+  } else {
+    console.log('⚠️  No static files found! Available directories:');
+    try {
+      const cwdContents = fs.readdirSync(process.cwd());
+      console.log(`   CWD contents: ${cwdContents.join(', ')}`);
+      if (fs.existsSync(path.join(process.cwd(), 'client'))) {
+        const clientContents = fs.readdirSync(path.join(process.cwd(), 'client'));
+        console.log(`   client/ contents: ${clientContents.join(', ')}`);
+      }
+    } catch (e) {
+      console.log('   Could not list directories');
+    }
+    
+    // Fallback: serve a simple HTML page
+    app.get('*', (req, res) => {
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Administrador de Propriedades</title></head>
+        <body style="font-family: sans-serif; padding: 50px; text-align: center;">
+          <h1>🏠 Administrador de Propriedades</h1>
+          <p>O servidor está funcionando, mas os arquivos do frontend não foram encontrados.</p>
+          <p><a href="/api/health">Health Check</a> | <a href="/api/dev-login-page">Login</a></p>
+        </body>
+        </html>
+      `);
+    });
+  }
 }
 
 // Start server
