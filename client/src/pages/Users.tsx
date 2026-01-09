@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Link } from "wouter";
-import { ArrowLeft, Trash2, UserCheck, AlertCircle } from "lucide-react";
+import { ArrowLeft, Trash2, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { ErrorState, LoadingState } from "@/components/StateComponents";
 

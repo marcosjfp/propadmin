@@ -202,19 +202,7 @@ export default function Profile() {
                 <p className="text-lg font-semibold font-mono">{user?.id}</p>
               </div>
 
-              <div>
-                <p className="text-sm text-gray-600">Criada em</p>
-                <p className="text-lg font-semibold">
-                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString("pt-BR") : "-"}
-                </p>
-              </div>
 
-              <div>
-                <p className="text-sm text-gray-600">Último acesso</p>
-                <p className="text-lg font-semibold">
-                  {user?.lastSignedIn ? new Date(user.lastSignedIn).toLocaleDateString("pt-BR") : "-"}
-                </p>
-              </div>
             </div>
           </CardContent>
         </Card>
