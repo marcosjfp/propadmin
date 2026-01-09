@@ -98,18 +98,18 @@ export default function Users() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow">
-        <div className="container mx-auto px-4 py-4 flex items-center gap-4">
+        <div className="container mx-auto px-4 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
           <Link href="/">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
+            <Button variant="ghost" size="sm" className="h-8 px-2">
+              <ArrowLeft className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Voltar</span>
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Gerenciar Usuários</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Gerenciar Usuários</h1>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
         {usersQuery.isLoading ? (
           <div className="text-center py-12">
             <p className="text-gray-600">Carregando usuários...</p>
@@ -118,25 +118,26 @@ export default function Users() {
           <div className="space-y-4">
             {usersQuery.data.map((u) => (
               <Card key={u.id}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
+                <CardHeader className="pb-3 sm:pb-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
                     <div>
-                      <CardTitle>{u.name || "Sem nome"}</CardTitle>
-                      <CardDescription>{u.email || "Sem email"}</CardDescription>
+                      <CardTitle className="text-lg">{u.name || "Sem nome"}</CardTitle>
+                      <CardDescription className="text-sm">{u.email || "Sem email"}</CardDescription>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {!u.isAgent && u.role === "user" && (
                         <Dialog open={promoteDialogOpen && selectedUser?.id === u.id} onOpenChange={(open) => {
                           setPromoteDialogOpen(open);
                           if (open) setSelectedUser(u);
                         }}>
                           <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              <UserCheck className="h-4 w-4 mr-2" />
-                              Promover a Agente
+                            <Button variant="outline" size="sm" className="h-8">
+                              <UserCheck className="h-4 w-4 sm:mr-2" />
+                              <span className="hidden sm:inline">Promover a Agente</span>
+                              <span className="sm:hidden">Promover</span>
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="max-w-[95vw] sm:max-w-md">
                             <DialogHeader>
                               <DialogTitle>Promover a Agente</DialogTitle>
                               <DialogDescription>
@@ -166,6 +167,7 @@ export default function Users() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-8"
                         onClick={() => handleDelete(u.id)}
                         disabled={deleteMutation.isPending}
                       >
@@ -174,12 +176,12 @@ export default function Users() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                     <div>
-                      <p className="text-sm text-gray-600">Papel</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Papel</p>
                       <Select value={u.role} onValueChange={(value) => handleUpdateRole(u.id, value)}>
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger className="mt-1 h-9">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -190,16 +192,16 @@ export default function Users() {
                       </Select>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Telefone</p>
-                      <p className="font-semibold">{u.phone || "-"}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Telefone</p>
+                      <p className="font-semibold text-sm sm:text-base">{u.phone || "-"}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">CRECI</p>
-                      <p className="font-semibold">{u.creci || "-"}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">CRECI</p>
+                      <p className="font-semibold text-sm sm:text-base">{u.creci || "-"}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Status</p>
-                      <p className="font-semibold">{u.isAgent ? "Agente Ativo" : "Não é Agente"}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Status</p>
+                      <p className="font-semibold text-sm sm:text-base">{u.isAgent ? "Agente Ativo" : "Não é Agente"}</p>
                     </div>
                   </div>
                 </CardContent>

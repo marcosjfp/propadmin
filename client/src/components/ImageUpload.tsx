@@ -8,7 +8,8 @@ import {
   X, 
   Star, 
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Camera
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -38,10 +39,13 @@ interface ImageUploadProps {
 
 export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const imagesQuery = trpc.images.listByProperty.useQuery({ propertyId });
+  const imagesQuery = trpc.images.listByProperty.useQuery({ propertyId }, {
+    enabled: propertyId > 0,
+  });
   const createMutation = trpc.images.create.useMutation();
   const deleteMutation = trpc.images.delete.useMutation();
   const setPrimaryMutation = trpc.images.setPrimary.useMutation();
@@ -53,6 +57,12 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    // Verificar se propertyId é válido
+    if (!propertyId || propertyId <= 0) {
+      toast.error("É necessário salvar a propriedade antes de adicionar imagens");
+      return;
+    }
+
     const remainingSlots = 10 - images.length;
     const filesToUpload = Array.from(files).slice(0, remainingSlots);
 
@@ -61,43 +71,66 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
     }
 
     setIsUploading(true);
+    let successCount = 0;
+    let errorCount = 0;
 
     try {
-      for (const file of filesToUpload) {
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i];
+        setUploadProgress(`Enviando ${i + 1} de ${filesToUpload.length}...`);
+        
         // Validar tipo
         if (!file.type.startsWith('image/')) {
           toast.error(`${file.name} não é uma imagem válida`);
+          errorCount++;
           continue;
         }
 
         // Validar tamanho (máx 5MB)
         if (file.size > 5 * 1024 * 1024) {
           toast.error(`${file.name} é muito grande. Máximo 5MB.`);
+          errorCount++;
           continue;
         }
 
-        // Converter para base64
-        const base64 = await fileToBase64(file);
-        const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.${file.name.split('.').pop()}`;
+        try {
+          // Converter para base64
+          const base64 = await fileToBase64(file);
+          const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.${file.name.split('.').pop()}`;
 
-        await createMutation.mutateAsync({
-          propertyId,
-          base64Data: base64,
-          filename,
-          originalName: file.name,
-          mimeType: file.type,
-          size: file.size,
-          isPrimary: images.length === 0, // Primeira imagem é principal
-        });
+          await createMutation.mutateAsync({
+            propertyId,
+            base64Data: base64,
+            filename,
+            originalName: file.name,
+            mimeType: file.type,
+            size: file.size,
+            isPrimary: images.length === 0 && i === 0, // Primeira imagem é principal
+          });
+          successCount++;
+        } catch (error: any) {
+          console.error(`Erro ao enviar ${file.name}:`, error);
+          const errorMessage = error?.message || 'Erro desconhecido';
+          toast.error(`Erro ao enviar ${file.name}: ${errorMessage}`);
+          errorCount++;
+        }
       }
 
-      toast.success('Imagens enviadas com sucesso!');
-      imagesQuery.refetch();
-      onImagesChange?.(imagesQuery.data || []);
+      if (successCount > 0) {
+        toast.success(`${successCount} imagem(ns) enviada(s) com sucesso!`);
+        await imagesQuery.refetch();
+        onImagesChange?.(imagesQuery.data || []);
+      }
+      
+      if (errorCount > 0 && successCount === 0) {
+        toast.error('Nenhuma imagem foi enviada. Verifique os arquivos e tente novamente.');
+      }
     } catch (error: any) {
+      console.error('Erro geral no upload:', error);
       toast.error('Erro ao enviar imagens: ' + (error?.message || 'Erro desconhecido'));
     } finally {
       setIsUploading(false);
+      setUploadProgress("");
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -105,12 +138,11 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
   }, [propertyId, images.length, createMutation, imagesQuery, onImagesChange]);
 
   const handleDelete = async (imageId: number) => {
-    if (!confirm('Tem certeza que deseja excluir esta imagem?')) return;
-
     try {
       await deleteMutation.mutateAsync({ imageId });
       toast.success('Imagem excluída');
-      imagesQuery.refetch();
+      await imagesQuery.refetch();
+      onImagesChange?.(imagesQuery.data || []);
     } catch (error: any) {
       toast.error('Erro ao excluir: ' + (error?.message || 'Erro desconhecido'));
     }
@@ -120,7 +152,8 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
     try {
       await setPrimaryMutation.mutateAsync({ imageId });
       toast.success('Imagem principal definida');
-      imagesQuery.refetch();
+      await imagesQuery.refetch();
+      onImagesChange?.(imagesQuery.data || []);
     } catch (error: any) {
       toast.error('Erro: ' + (error?.message || 'Erro desconhecido'));
     }
@@ -152,35 +185,48 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h3 className="font-semibold">Imagens do Imóvel</h3>
           <p className="text-sm text-gray-500">{images.length}/10 imagens</p>
         </div>
         {canAddMore && (
-          <Button
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-          >
-            {isUploading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Enviando...
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Adicionar Imagens
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="flex-1 sm:flex-none"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {uploadProgress || "Enviando..."}
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Adicionar
+                </>
+              )}
+            </Button>
+            {/* Mobile Camera Button */}
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="sm:hidden"
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
+          </div>
         )}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*"
           multiple
+          capture="environment"
           className="hidden"
           onChange={handleFileSelect}
         />
@@ -188,63 +234,72 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
 
       {/* Images Grid */}
       {images.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
           {images.map((image) => (
             <Card key={image.id} className={`relative group overflow-hidden ${image.isPrimary ? 'ring-2 ring-blue-500' : ''}`}>
               <CardContent className="p-0">
                 <div 
-                  className="aspect-square bg-gray-100 cursor-pointer"
+                  className="aspect-square bg-gray-100 cursor-pointer relative"
                   onClick={() => setPreviewImage(image.url)}
                 >
                   <img
                     src={image.url}
                     alt={image.originalName}
                     className="w-full h-full object-cover"
+                    loading="lazy"
                   />
+                  
+                  {/* Primary Badge */}
+                  {image.isPrimary && (
+                    <div className="absolute top-1 left-1 sm:top-2 sm:left-2 bg-blue-500 text-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium flex items-center gap-1">
+                      <Star className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                      <span className="hidden xs:inline">Principal</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions - Always visible on mobile, hover on desktop */}
+                <div className="absolute inset-0 bg-black/40 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 opacity-0 touch-none pointer-events-none sm:pointer-events-auto">
                 </div>
                 
-                {/* Primary Badge */}
-                {image.isPrimary && (
-                  <div className="absolute top-2 left-2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1">
-                    <Star className="h-3 w-3" />
-                    Principal
+                {/* Action buttons at bottom */}
+                <div className="p-2 bg-white border-t flex items-center justify-between gap-1">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] sm:text-xs text-gray-500 truncate" title={image.originalName}>
+                      {image.originalName}
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-gray-400">{formatFileSize(image.size)}</p>
                   </div>
-                )}
-
-                {/* Actions Overlay */}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  {!image.isPrimary && (
+                  <div className="flex gap-1">
+                    {!image.isPrimary && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSetPrimary(image.id);
+                        }}
+                        disabled={setPrimaryMutation.isPending}
+                        title="Definir como principal"
+                      >
+                        <Star className="h-3.5 w-3.5 text-blue-600" />
+                      </Button>
+                    )}
                     <Button
                       size="sm"
-                      variant="secondary"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleSetPrimary(image.id);
+                        handleDelete(image.id);
                       }}
-                      disabled={setPrimaryMutation.isPending}
+                      disabled={deleteMutation.isPending}
+                      title="Excluir imagem"
                     >
-                      <Star className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5 text-red-600" />
                     </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(image.id);
-                    }}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* File Info */}
-                <div className="p-2 bg-white">
-                  <p className="text-xs text-gray-500 truncate" title={image.originalName}>
-                    {image.originalName}
-                  </p>
-                  <p className="text-xs text-gray-400">{formatFileSize(image.size)}</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -252,18 +307,20 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
         </div>
       ) : (
         <Card className="border-dashed">
-          <CardContent className="py-12 text-center">
-            <Image className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500 mb-4">Nenhuma imagem cadastrada</p>
+          <CardContent className="py-8 sm:py-12 text-center">
+            <Image className="h-10 w-10 sm:h-12 sm:w-12 mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-500 mb-4 text-sm sm:text-base">Nenhuma imagem cadastrada</p>
             {canAddMore && (
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Adicionar Imagens
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Selecionar Imagens
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -271,16 +328,16 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
 
       {/* Limit Warning */}
       {!canAddMore && (
-        <div className="flex items-center gap-2 text-amber-600 text-sm">
-          <AlertCircle className="h-4 w-4" />
+        <div className="flex items-center gap-2 text-amber-600 text-sm bg-amber-50 p-3 rounded-lg">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
           <span>Limite máximo de 10 imagens atingido</span>
         </div>
       )}
 
       {/* Preview Dialog */}
       <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl p-2 sm:p-6">
+          <DialogHeader className="sr-only">
             <DialogTitle>Visualizar Imagem</DialogTitle>
           </DialogHeader>
           <div className="flex items-center justify-center">
@@ -288,7 +345,7 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
               <img
                 src={previewImage}
                 alt="Preview"
-                className="max-h-[70vh] object-contain rounded-lg"
+                className="max-h-[80vh] w-auto object-contain rounded-lg"
               />
             )}
           </div>
@@ -301,7 +358,9 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
 // Componente simplificado para exibição somente leitura
 export function PropertyImageGallery({ propertyId }: { propertyId: number }) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const imagesQuery = trpc.images.listByProperty.useQuery({ propertyId });
+  const imagesQuery = trpc.images.listByProperty.useQuery({ propertyId }, {
+    enabled: propertyId > 0,
+  });
   
   const images = imagesQuery.data || [];
   const primaryImage = images.find(img => img.isPrimary) || images[0];
@@ -309,15 +368,15 @@ export function PropertyImageGallery({ propertyId }: { propertyId: number }) {
 
   if (imagesQuery.isLoading) {
     return (
-      <div className="h-[400px] bg-gray-100 animate-pulse rounded-lg" />
+      <div className="h-[250px] sm:h-[400px] bg-gray-100 animate-pulse rounded-lg" />
     );
   }
 
   if (images.length === 0) {
     return (
-      <div className="h-[400px] bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center rounded-lg">
+      <div className="h-[250px] sm:h-[400px] bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center rounded-lg">
         <div className="text-center">
-          <Image className="h-24 w-24 text-blue-400 mx-auto mb-4" />
+          <Image className="h-16 w-16 sm:h-24 sm:w-24 text-blue-400 mx-auto mb-4" />
           <p className="text-blue-500 font-medium">Sem imagens disponíveis</p>
         </div>
       </div>
@@ -325,10 +384,10 @@ export function PropertyImageGallery({ propertyId }: { propertyId: number }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {/* Main Image */}
       <div 
-        className="h-[400px] bg-gray-100 rounded-lg overflow-hidden cursor-pointer"
+        className="h-[250px] sm:h-[400px] bg-gray-100 rounded-lg overflow-hidden cursor-pointer"
         onClick={() => setSelectedImage(primaryImage?.url || null)}
       >
         <img
@@ -340,7 +399,7 @@ export function PropertyImageGallery({ propertyId }: { propertyId: number }) {
 
       {/* Thumbnails */}
       {otherImages.length > 0 && (
-        <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
           {otherImages.map((image) => (
             <div
               key={image.id}
@@ -351,6 +410,7 @@ export function PropertyImageGallery({ propertyId }: { propertyId: number }) {
                 src={image.url}
                 alt={image.originalName}
                 className="w-full h-full object-cover hover:scale-105 transition-transform"
+                loading="lazy"
               />
             </div>
           ))}
@@ -359,13 +419,13 @@ export function PropertyImageGallery({ propertyId }: { propertyId: number }) {
 
       {/* Preview Dialog */}
       <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl p-2 sm:p-6">
           <div className="flex items-center justify-center">
             {selectedImage && (
               <img
                 src={selectedImage}
                 alt="Preview"
-                className="max-h-[80vh] object-contain rounded-lg"
+                className="max-h-[80vh] w-auto object-contain rounded-lg"
               />
             )}
           </div>

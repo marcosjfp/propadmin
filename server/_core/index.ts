@@ -143,6 +143,12 @@ app.get('/api/dev-login', (req, res) => {
 
 // Dev login page with role selection
 app.get('/api/dev-login-page', (req, res) => {
+  // Se passou role na query, redireciona direto para o login
+  const role = req.query.role as string;
+  if (role && ['admin', 'agent', 'user'].includes(role)) {
+    return res.redirect(`/api/dev-login?role=${role}`);
+  }
+
   res.send(`
     <!DOCTYPE html>
     <html lang="pt-BR">
@@ -163,10 +169,10 @@ app.get('/api/dev-login-page', (req, res) => {
         }
         .login-container {
           background: white;
-          padding: 50px;
+          padding: 40px;
           border-radius: 20px;
           box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-          max-width: 450px;
+          max-width: 500px;
           width: 100%;
           text-align: center;
         }
@@ -183,10 +189,10 @@ app.get('/api/dev-login-page', (req, res) => {
         .subtitle {
           color: #6b7280;
           font-size: 16px;
-          margin-bottom: 40px;
+          margin-bottom: 30px;
         }
         .role-section {
-          margin-bottom: 30px;
+          margin-bottom: 20px;
         }
         .role-label {
           color: #374151;
@@ -202,12 +208,12 @@ app.get('/api/dev-login-page', (req, res) => {
           align-items: center;
           gap: 15px;
           width: 100%;
-          padding: 18px 25px;
-          margin-bottom: 15px;
+          padding: 16px 20px;
+          margin-bottom: 12px;
           text-decoration: none;
           border-radius: 12px;
           font-weight: 600;
-          font-size: 16px;
+          font-size: 15px;
           transition: all 0.3s ease;
           border: 2px solid transparent;
         }
@@ -232,13 +238,6 @@ app.get('/api/dev-login-page', (req, res) => {
           font-size: 18px;
           opacity: 0.7;
         }
-        .corretor {
-          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-          color: white;
-        }
-        .corretor:hover {
-          background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-        }
         .admin {
           background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
           color: white;
@@ -246,10 +245,24 @@ app.get('/api/dev-login-page', (req, res) => {
         .admin:hover {
           background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
         }
+        .corretor {
+          background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+          color: white;
+        }
+        .corretor:hover {
+          background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+        }
+        .usuario {
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+        }
+        .usuario:hover {
+          background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        }
         .divider {
           display: flex;
           align-items: center;
-          margin: 30px 0;
+          margin: 25px 0;
           color: #9ca3af;
           font-size: 12px;
         }
@@ -266,12 +279,16 @@ app.get('/api/dev-login-page', (req, res) => {
           color: #9ca3af;
           font-size: 13px;
         }
-        .footer a {
-          color: #6366f1;
-          text-decoration: none;
-        }
-        .footer a:hover {
-          text-decoration: underline;
+        @media (max-width: 480px) {
+          .login-container {
+            padding: 25px;
+          }
+          h1 {
+            font-size: 24px;
+          }
+          .login-btn {
+            padding: 14px 16px;
+          }
         }
       </style>
     </head>
@@ -284,8 +301,17 @@ app.get('/api/dev-login-page', (req, res) => {
         <div class="role-section">
           <p class="role-label">Selecione seu perfil para entrar</p>
           
+          <a href="/api/dev-login?role=admin" class="login-btn admin">
+            <span class="icon">🛡️</span>
+            <span class="text">
+              <strong>Administrador</strong>
+              <div class="description">Acesso completo ao sistema e relatórios</div>
+            </span>
+            <span class="arrow">→</span>
+          </a>
+          
           <a href="/api/dev-login?role=agent" class="login-btn corretor">
-            <span class="icon">🏢</span>
+            <span class="icon">💼</span>
             <span class="text">
               <strong>Corretor de Imóveis</strong>
               <div class="description">Gerencie imóveis e acompanhe suas comissões</div>
@@ -293,11 +319,11 @@ app.get('/api/dev-login-page', (req, res) => {
             <span class="arrow">→</span>
           </a>
           
-          <a href="/api/dev-login?role=admin" class="login-btn admin">
-            <span class="icon">⚙️</span>
+          <a href="/api/dev-login?role=user" class="login-btn usuario">
+            <span class="icon">👤</span>
             <span class="text">
-              <strong>Administrador</strong>
-              <div class="description">Acesso completo ao sistema e relatórios</div>
+              <strong>Usuário</strong>
+              <div class="description">Visualize imóveis e entre em contato</div>
             </span>
             <span class="arrow">→</span>
           </a>

@@ -175,31 +175,33 @@ export default function PropertyDetails() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/propriedades">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Voltar
+        <div className="container mx-auto px-4 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Link href="/propriedades">
+                <Button variant="ghost" size="sm" className="h-8 px-2">
+                  <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Voltar</span>
+                </Button>
+              </Link>
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">{property.title}</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleShare} className="flex-1 sm:flex-none h-8">
+                <Share2 className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Compartilhar</span>
               </Button>
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">{property.title}</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleShare}>
-              <Share2 className="h-4 w-4 mr-2" />
-              Compartilhar
-            </Button>
-            <Button variant="outline" size="sm">
-              <Heart className="h-4 w-4 mr-2" />
-              Favoritar
-            </Button>
+              <Button variant="outline" size="sm" className="flex-1 sm:flex-none h-8">
+                <Heart className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Favoritar</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-3 gap-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
+        <div className="grid lg:grid-cols-3 gap-4 sm:gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Image Gallery */}
@@ -207,90 +209,92 @@ export default function PropertyDetails() {
 
             {/* Details */}
             <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
+              <CardHeader className="pb-3 sm:pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
-                    <CardTitle className="text-2xl">{property.title}</CardTitle>
-                    <CardDescription className="flex items-center gap-2 mt-2">
-                      <MapPin className="h-4 w-4" />
-                      {property.address}, {property.city} - {property.state}
-                      {property.zipCode && ` | CEP: ${property.zipCode}`}
+                    <CardTitle className="text-xl sm:text-2xl">{property.title}</CardTitle>
+                    <CardDescription className="flex items-start sm:items-center gap-2 mt-2">
+                      <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5 sm:mt-0" />
+                      <span className="text-sm">
+                        {property.address}, {property.city} - {property.state}
+                        {property.zipCode && ` | CEP: ${property.zipCode}`}
+                      </span>
                     </CardDescription>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2">
                     {getStatusBadge(property.status)}
                     <Badge variant="outline">{getTypeBadge(property.type)}</Badge>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-0">
                 {/* Price */}
-                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-600 mb-1">
+                <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-blue-50 rounded-lg">
+                  <p className="text-xs sm:text-sm text-blue-600 mb-1">
                     {property.transactionType === "venda" ? "Valor de Venda" : "Valor do Aluguel"}
                   </p>
-                  <p className="text-4xl font-bold text-blue-700">
+                  <p className="text-2xl sm:text-4xl font-bold text-blue-700">
                     {formatPrice(property.price)}
                     {property.transactionType === "aluguel" && (
-                      <span className="text-lg font-normal">/mês</span>
+                      <span className="text-sm sm:text-lg font-normal">/mês</span>
                     )}
                   </p>
-                  <p className="text-sm text-blue-600 mt-1">
+                  <p className="text-xs sm:text-sm text-blue-600 mt-1">
                     Comissão: {property.transactionType === "venda" ? "8%" : "10%"}
                   </p>
                 </div>
 
                 {/* Features Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <Ruler className="h-5 w-5 text-gray-500" />
-                    <div>
-                      <p className="text-xs text-gray-500">Área</p>
-                      <p className="font-semibold">{property.size} m²</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                  <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
+                    <Ruler className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Área</p>
+                      <p className="font-semibold text-sm sm:text-base">{property.size} m²</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <Bed className="h-5 w-5 text-gray-500" />
-                    <div>
-                      <p className="text-xs text-gray-500">Quartos</p>
-                      <p className="font-semibold">{property.rooms}</p>
+                  <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
+                    <Bed className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Quartos</p>
+                      <p className="font-semibold text-sm sm:text-base">{property.rooms}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <Bath className="h-5 w-5 text-gray-500" />
-                    <div>
-                      <p className="text-xs text-gray-500">Banheiros</p>
-                      <p className="font-semibold">{property.bathrooms}</p>
+                  <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
+                    <Bath className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Banheiros</p>
+                      <p className="font-semibold text-sm sm:text-base">{property.bathrooms}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <Calendar className="h-5 w-5 text-gray-500" />
-                    <div>
-                      <p className="text-xs text-gray-500">Cadastrado em</p>
-                      <p className="font-semibold text-sm">{formatDate(property.createdAt)}</p>
+                  <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg">
+                    <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-xs text-gray-500">Cadastrado</p>
+                      <p className="font-semibold text-xs sm:text-sm truncate">{formatDate(property.createdAt)}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Amenities */}
-                <div className="mb-6">
-                  <h3 className="font-semibold mb-3">Comodidades</h3>
+                <div className="mb-4 sm:mb-6">
+                  <h3 className="font-semibold mb-2 sm:mb-3 text-sm sm:text-base">Comodidades</h3>
                   <div className="flex flex-wrap gap-2">
                     {property.hasLivingRoom && (
-                      <div className="flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-full text-sm">
-                        <Sofa className="h-4 w-4" />
-                        Sala de Estar
+                      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-green-50 text-green-700 rounded-full text-xs sm:text-sm">
+                        <Sofa className="h-3 w-3 sm:h-4 sm:w-4" />
+                        Sala
                       </div>
                     )}
                     {property.hasKitchen && (
-                      <div className="flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-full text-sm">
-                        <UtensilsCrossed className="h-4 w-4" />
+                      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-green-50 text-green-700 rounded-full text-xs sm:text-sm">
+                        <UtensilsCrossed className="h-3 w-3 sm:h-4 sm:w-4" />
                         Cozinha
                       </div>
                     )}
                     {property.hasBackyard && (
-                      <div className="flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-full text-sm">
-                        <Trees className="h-4 w-4" />
+                      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-green-50 text-green-700 rounded-full text-xs sm:text-sm">
+                        <Trees className="h-3 w-3 sm:h-4 sm:w-4" />
                         Quintal
                       </div>
                     )}
@@ -300,8 +304,8 @@ export default function PropertyDetails() {
                 {/* Description */}
                 {property.description && (
                   <div>
-                    <h3 className="font-semibold mb-3">Descrição</h3>
-                    <p className="text-gray-600 whitespace-pre-wrap">{property.description}</p>
+                    <h3 className="font-semibold mb-2 sm:mb-3 text-sm sm:text-base">Descrição</h3>
+                    <p className="text-gray-600 whitespace-pre-wrap text-sm">{property.description}</p>
                   </div>
                 )}
               </CardContent>

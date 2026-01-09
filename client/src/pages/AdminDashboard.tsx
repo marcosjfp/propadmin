@@ -26,19 +26,26 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Link } from "wouter";
-import { ArrowLeft, Users, Building2, DollarSign, CheckCircle, Clock, XCircle, UserPlus, Trash2, Edit2, TrendingUp, Calendar, FileText, Download, History } from "lucide-react";
+import { ArrowLeft, Users, Building2, DollarSign, CheckCircle, Clock, XCircle, UserPlus, Trash2, Edit2, TrendingUp, Calendar, FileText, Download, History, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [editingUser, setEditingUser] = useState<any>(null);
   const [userDialogOpen, setUserDialogOpen] = useState(false);
+  const [createAgentDialogOpen, setCreateAgentDialogOpen] = useState(false);
   const [reportPeriod, setReportPeriod] = useState("all");
   const [userForm, setUserForm] = useState({
     name: "",
     email: "",
     phone: "",
     role: "user" as "user" | "agent" | "admin",
+    creci: "",
+  });
+  const [newAgentForm, setNewAgentForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
     creci: "",
   });
 
@@ -51,6 +58,7 @@ export default function AdminDashboard() {
   const updateUserMutation = trpc.users.update.useMutation();
   const deleteUserMutation = trpc.users.delete.useMutation();
   const promoteToAgentMutation = trpc.users.promoteToAgent.useMutation();
+  const createAgentMutation = trpc.users.createAgent.useMutation();
   const updateCommissionStatusMutation = trpc.commissions.updateStatus.useMutation();
 
   if (user?.role !== "admin") {
@@ -191,6 +199,31 @@ export default function AdminDashboard() {
   // Exposing the function so TypeScript doesn't complain
   console.debug('handlePromoteToAgent available:', typeof handlePromoteToAgent);
 
+  const handleCreateAgent = async () => {
+    if (!newAgentForm.name.trim()) {
+      toast.error("Nome é obrigatório");
+      return;
+    }
+    if (!newAgentForm.email.trim()) {
+      toast.error("Email é obrigatório");
+      return;
+    }
+    if (!newAgentForm.creci.trim()) {
+      toast.error("CRECI é obrigatório");
+      return;
+    }
+
+    try {
+      await createAgentMutation.mutateAsync(newAgentForm);
+      toast.success("Corretor criado com sucesso!");
+      setCreateAgentDialogOpen(false);
+      setNewAgentForm({ name: "", email: "", phone: "", creci: "" });
+      usersQuery.refetch();
+    } catch (error: any) {
+      toast.error("Erro ao criar corretor: " + (error?.message || "Erro desconhecido"));
+    }
+  };
+
   const handleUpdateCommissionStatus = async (commissionId: number, status: "pendente" | "paga" | "cancelada") => {
     try {
       await updateCommissionStatusMutation.mutateAsync({
@@ -322,22 +355,26 @@ export default function AdminDashboard() {
 
         {/* Tabs for Management */}
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="users">
-              <Users className="h-4 w-4 mr-2" />
-              Usuários
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
+            <TabsTrigger value="users" className="flex items-center gap-1 text-xs md:text-sm py-2">
+              <Users className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Usuários</span>
+              <span className="sm:hidden">Users</span>
             </TabsTrigger>
-            <TabsTrigger value="commissions">
-              <DollarSign className="h-4 w-4 mr-2" />
-              Comissões
+            <TabsTrigger value="commissions" className="flex items-center gap-1 text-xs md:text-sm py-2">
+              <DollarSign className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Comissões</span>
+              <span className="sm:hidden">$</span>
             </TabsTrigger>
-            <TabsTrigger value="agents">
-              <UserPlus className="h-4 w-4 mr-2" />
-              Corretores
+            <TabsTrigger value="agents" className="flex items-center gap-1 text-xs md:text-sm py-2">
+              <UserPlus className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Corretores</span>
+              <span className="sm:hidden">Corret.</span>
             </TabsTrigger>
-            <TabsTrigger value="reports">
-              <FileText className="h-4 w-4 mr-2" />
-              Relatórios
+            <TabsTrigger value="reports" className="flex items-center gap-1 text-xs md:text-sm py-2">
+              <FileText className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Relatórios</span>
+              <span className="sm:hidden">Relat.</span>
             </TabsTrigger>
           </TabsList>
 
@@ -345,64 +382,130 @@ export default function AdminDashboard() {
           <TabsContent value="users">
             <Card>
               <CardHeader>
-                <CardTitle>Gerenciar Usuários</CardTitle>
-                <CardDescription>Lista de todos os usuários do sistema</CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>Gerenciar Usuários</CardTitle>
+                    <CardDescription>Lista de todos os usuários do sistema</CardDescription>
+                  </div>
+                  <Button 
+                    onClick={() => setCreateAgentDialogOpen(true)}
+                    className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Novo Corretor
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 {usersQuery.isLoading ? (
                   <p className="text-center py-4 text-gray-500">Carregando...</p>
                 ) : usersQuery.data && usersQuery.data.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-3 px-2">Nome</th>
-                          <th className="text-left py-3 px-2">Email</th>
-                          <th className="text-left py-3 px-2">Telefone</th>
-                          <th className="text-left py-3 px-2">Papel</th>
-                          <th className="text-left py-3 px-2">CRECI</th>
-                          <th className="text-left py-3 px-2">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {usersQuery.data.map((u) => (
-                          <tr key={u.id} className="border-b hover:bg-gray-50">
-                            <td className="py-3 px-2">{u.name || "-"}</td>
-                            <td className="py-3 px-2">{u.email || "-"}</td>
-                            <td className="py-3 px-2">{u.phone || "-"}</td>
-                            <td className="py-3 px-2">
-                              <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                u.role === "admin" ? "bg-purple-100 text-purple-800" :
-                                u.role === "agent" ? "bg-blue-100 text-blue-800" :
-                                "bg-gray-100 text-gray-800"
-                              }`}>
-                                {u.role === "admin" ? "Admin" : u.role === "agent" ? "Corretor" : "Usuário"}
-                              </span>
-                            </td>
-                            <td className="py-3 px-2">{u.creci || "-"}</td>
-                            <td className="py-3 px-2">
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEditUser(u)}
-                                >
-                                  <Edit2 className="h-4 w-4 text-blue-600" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteUser(u.id)}
-                                  disabled={u.id === user?.id}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </Button>
-                              </div>
-                            </td>
+                  <div className="space-y-4">
+                    {/* Desktop Table */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-3 px-2">Nome</th>
+                            <th className="text-left py-3 px-2">Email</th>
+                            <th className="text-left py-3 px-2">Telefone</th>
+                            <th className="text-left py-3 px-2">Papel</th>
+                            <th className="text-left py-3 px-2">CRECI</th>
+                            <th className="text-left py-3 px-2">Ações</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {usersQuery.data.map((u) => (
+                            <tr key={u.id} className="border-b hover:bg-gray-50">
+                              <td className="py-3 px-2">{u.name || "-"}</td>
+                              <td className="py-3 px-2">{u.email || "-"}</td>
+                              <td className="py-3 px-2">{u.phone || "-"}</td>
+                              <td className="py-3 px-2">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  u.role === "admin" ? "bg-purple-100 text-purple-800" :
+                                  u.role === "agent" ? "bg-blue-100 text-blue-800" :
+                                  "bg-gray-100 text-gray-800"
+                                }`}>
+                                  {u.role === "admin" ? "Admin" : u.role === "agent" ? "Corretor" : "Usuário"}
+                                </span>
+                              </td>
+                              <td className="py-3 px-2">{u.creci || "-"}</td>
+                              <td className="py-3 px-2">
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditUser(u)}
+                                  >
+                                    <Edit2 className="h-4 w-4 text-blue-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteUser(u.id)}
+                                    disabled={u.id === user?.id}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    {/* Mobile Cards */}
+                    <div className="md:hidden space-y-3">
+                      {usersQuery.data.map((u) => (
+                        <div key={u.id} className="border rounded-lg p-4 bg-white">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h4 className="font-semibold">{u.name || "Sem nome"}</h4>
+                              <p className="text-sm text-gray-500">{u.email || "-"}</p>
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              u.role === "admin" ? "bg-purple-100 text-purple-800" :
+                              u.role === "agent" ? "bg-blue-100 text-blue-800" :
+                              "bg-gray-100 text-gray-800"
+                            }`}>
+                              {u.role === "admin" ? "Admin" : u.role === "agent" ? "Corretor" : "Usuário"}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                            <div>
+                              <p className="text-gray-500">Telefone</p>
+                              <p className="font-medium">{u.phone || "-"}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500">CRECI</p>
+                              <p className="font-medium">{u.creci || "-"}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 border-t pt-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => handleEditUser(u)}
+                            >
+                              <Edit2 className="h-4 w-4 mr-2" />
+                              Editar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
+                              onClick={() => handleDeleteUser(u.id)}
+                              disabled={u.id === user?.id}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Excluir
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <p className="text-center py-4 text-gray-500">Nenhum usuário encontrado</p>
@@ -694,7 +797,7 @@ export default function AdminDashboard() {
 
       {/* Edit User Dialog */}
       <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar Usuário</DialogTitle>
             <DialogDescription>Atualize os dados do usuário</DialogDescription>
@@ -754,6 +857,58 @@ export default function AdminDashboard() {
               disabled={updateUserMutation.isPending}
             >
               {updateUserMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Agent Dialog */}
+      <Dialog open={createAgentDialogOpen} onOpenChange={setCreateAgentDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo Corretor</DialogTitle>
+            <DialogDescription>Cadastre um novo corretor no sistema</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nome Completo *</Label>
+              <Input
+                value={newAgentForm.name}
+                onChange={(e) => setNewAgentForm({ ...newAgentForm, name: e.target.value })}
+                placeholder="Ex: João da Silva"
+              />
+            </div>
+            <div>
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                value={newAgentForm.email}
+                onChange={(e) => setNewAgentForm({ ...newAgentForm, email: e.target.value })}
+                placeholder="Ex: joao@email.com"
+              />
+            </div>
+            <div>
+              <Label>Telefone</Label>
+              <Input
+                value={newAgentForm.phone}
+                onChange={(e) => setNewAgentForm({ ...newAgentForm, phone: e.target.value })}
+                placeholder="Ex: (11) 99999-9999"
+              />
+            </div>
+            <div>
+              <Label>CRECI *</Label>
+              <Input
+                value={newAgentForm.creci}
+                onChange={(e) => setNewAgentForm({ ...newAgentForm, creci: e.target.value })}
+                placeholder="Ex: 12345-F"
+              />
+            </div>
+            <Button 
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              onClick={handleCreateAgent}
+              disabled={createAgentMutation.isPending}
+            >
+              {createAgentMutation.isPending ? "Criando..." : "Criar Corretor"}
             </Button>
           </div>
         </DialogContent>

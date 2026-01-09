@@ -336,18 +336,18 @@ export default function Properties() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow">
-        <div className="container mx-auto px-4 py-4 flex items-center gap-4">
+        <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
           <Link href="/">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Propriedades</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Propriedades</h1>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 sm:py-8">
         {/* Barra de busca e filtros */}
         <div className="mb-6 space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
@@ -384,11 +384,11 @@ export default function Properties() {
           {showFilters && (
             <Card>
               <CardContent className="pt-6">
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <Label>Tipo de Imóvel</Label>
+                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <div className="col-span-2 sm:col-span-1">
+                    <Label className="text-xs sm:text-sm">Tipo de Imóvel</Label>
                     <Select value={filters.type} onValueChange={(v) => setFilters({ ...filters, type: v })}>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-9">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
@@ -401,10 +401,10 @@ export default function Properties() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label>Tipo de Transação</Label>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Label className="text-xs sm:text-sm">Tipo de Transação</Label>
                     <Select value={filters.transactionType} onValueChange={(v) => setFilters({ ...filters, transactionType: v })}>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-9">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
@@ -415,17 +415,18 @@ export default function Properties() {
                     </Select>
                   </div>
                   <div>
-                    <Label>Cidade</Label>
+                    <Label className="text-xs sm:text-sm">Cidade</Label>
                     <Input
                       placeholder="Ex: São Paulo"
                       value={filters.city}
                       onChange={(e) => setFilters({ ...filters, city: e.target.value })}
+                      className="h-9"
                     />
                   </div>
                   <div>
-                    <Label>Status</Label>
+                    <Label className="text-xs sm:text-sm">Status</Label>
                     <Select value={filters.status} onValueChange={(v) => setFilters({ ...filters, status: v })}>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-9">
                         <SelectValue placeholder="Todos" />
                       </SelectTrigger>
                       <SelectContent>
@@ -438,30 +439,33 @@ export default function Properties() {
                     </Select>
                   </div>
                   <div>
-                    <Label>Preço Mínimo (R$)</Label>
+                    <Label className="text-xs sm:text-sm">Preço Mínimo (R$)</Label>
                     <Input
                       type="number"
                       placeholder="0"
                       value={filters.minPrice}
                       onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })}
+                      className="h-9"
                     />
                   </div>
                   <div>
-                    <Label>Preço Máximo (R$)</Label>
+                    <Label className="text-xs sm:text-sm">Preço Máximo (R$)</Label>
                     <Input
                       type="number"
                       placeholder="Sem limite"
                       value={filters.maxPrice}
                       onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })}
+                      className="h-9"
                     />
                   </div>
                   <div>
-                    <Label>Quartos Mínimos</Label>
+                    <Label className="text-xs sm:text-sm">Quartos Mínimos</Label>
                     <Input
                       type="number"
                       placeholder="0"
                       value={filters.minRooms}
                       onChange={(e) => setFilters({ ...filters, minRooms: e.target.value })}
+                      className="h-9"
                     />
                   </div>
                 </div>
@@ -490,28 +494,29 @@ export default function Properties() {
                   Nova Propriedade
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{editingId ? "Editar Propriedade" : "Cadastrar Nova Propriedade"}</DialogTitle>
                   <DialogDescription>Preencha os detalhes da propriedade</DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Título</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="col-span-1 sm:col-span-2">
+                      <Label className="text-sm">Título</Label>
                       <Input
                         required
                         value={formData.title}
                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                         placeholder="Ex: Apartamento no Centro"
+                        className="h-10"
                       />
                     </div>
 
                     <div>
-                      <Label>Tipo de Propriedade</Label>
+                      <Label className="text-sm">Tipo de Propriedade</Label>
                       <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value as any })}>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -525,9 +530,9 @@ export default function Properties() {
                     </div>
 
                     <div>
-                      <Label>Tipo de Transação</Label>
+                      <Label className="text-sm">Tipo de Transação</Label>
                       <Select value={formData.transactionType} onValueChange={(value) => setFormData({ ...formData, transactionType: value as any })}>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -538,7 +543,7 @@ export default function Properties() {
                     </div>
 
                     <div>
-                      <Label>Preço (R$)</Label>
+                      <Label className="text-sm">Preço (R$)</Label>
                       <Input
                         required
                         type="number"
@@ -546,87 +551,95 @@ export default function Properties() {
                         value={formData.price}
                         onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                         placeholder="0.00"
+                        className="h-10"
                       />
                     </div>
 
                     <div>
-                      <Label>Tamanho (m²)</Label>
+                      <Label className="text-sm">Tamanho (m²)</Label>
                       <Input
                         required
                         type="number"
                         value={formData.size}
                         onChange={(e) => setFormData({ ...formData, size: e.target.value })}
                         placeholder="100"
+                        className="h-10"
                       />
                     </div>
 
                     <div>
-                      <Label>Quartos</Label>
+                      <Label className="text-sm">Quartos</Label>
                       <Input
                         required
                         type="number"
                         value={formData.rooms}
                         onChange={(e) => setFormData({ ...formData, rooms: e.target.value })}
                         placeholder="3"
+                        className="h-10"
                       />
                     </div>
 
                     <div>
-                      <Label>Banheiros</Label>
+                      <Label className="text-sm">Banheiros</Label>
                       <Input
                         required
                         type="number"
                         value={formData.bathrooms}
                         onChange={(e) => setFormData({ ...formData, bathrooms: e.target.value })}
                         placeholder="2"
+                        className="h-10"
                       />
                     </div>
 
                     <div>
-                      <Label>Estado (UF)</Label>
+                      <Label className="text-sm">Estado (UF)</Label>
                       <Input
                         required
                         maxLength={2}
                         value={formData.state}
                         onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })}
                         placeholder="SP"
-                      />
-                    </div>
-
-                    <div className="col-span-2">
-                      <Label>Endereço</Label>
-                      <Input
-                        required
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        placeholder="Rua Principal, 123"
+                        className="h-10"
                       />
                     </div>
 
                     <div>
-                      <Label>Cidade</Label>
+                      <Label className="text-sm">Cidade</Label>
                       <Input
                         required
                         value={formData.city}
                         onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                         placeholder="São Paulo"
+                        className="h-10"
+                      />
+                    </div>
+
+                    <div className="col-span-1 sm:col-span-2">
+                      <Label className="text-sm">Endereço</Label>
+                      <Input
+                        required
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        placeholder="Rua Principal, 123"
+                        className="h-10"
                       />
                     </div>
 
                     <div>
-                      <Label>CEP</Label>
+                      <Label className="text-sm">CEP</Label>
                       <Input
                         value={formData.zipCode}
                         onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
                         placeholder="01234-567"
+                        className="h-10"
                       />
                     </div>
 
                     {editingId && (
                       <div>
-                        <Label>Status</Label>
+                        <Label className="text-sm">Status</Label>
                         <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value as any })}>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -641,7 +654,7 @@ export default function Properties() {
                   </div>
 
                   <div>
-                    <Label>Descrição</Label>
+                    <Label className="text-sm">Descrição</Label>
                     <Textarea
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -691,28 +704,29 @@ export default function Properties() {
             <p className="text-gray-600">Carregando propriedades...</p>
           </div>
         ) : filteredProperties.length > 0 ? (
-          <div className="grid gap-6">
+          <div className="grid gap-4 sm:gap-6">
             {filteredProperties.map((property: any) => (
               <Card key={property.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="cursor-pointer" onClick={() => setLocation(`/imovel/${property.id}`)}>
-                      <CardTitle className="hover:text-blue-600 transition-colors">{property.title}</CardTitle>
-                      <CardDescription>
+                <CardHeader className="pb-3 sm:pb-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                    <div className="cursor-pointer flex-1" onClick={() => setLocation(`/imovel/${property.id}`)}>
+                      <CardTitle className="text-lg sm:text-xl hover:text-blue-600 transition-colors">{property.title}</CardTitle>
+                      <CardDescription className="text-sm">
                         {property.address}, {property.city} - {property.state}
                       </CardDescription>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setLocation(`/imovel/${property.id}`)}
                         title="Ver detalhes"
+                        className="h-8 px-2"
                       >
                         <Eye className="h-4 w-4 text-gray-600" />
                       </Button>
                     {(user?.role === "agent" || user?.role === "admin") && (
-                      <div className="flex gap-2">
+                      <>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -721,6 +735,7 @@ export default function Properties() {
                             setImageDialogOpen(true);
                           }}
                           title="Gerenciar imagens"
+                          className="h-8 px-2"
                         >
                           <ImageIcon className="h-4 w-4 text-purple-600" />
                         </Button>
@@ -728,17 +743,18 @@ export default function Properties() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="text-green-600 border-green-600 hover:bg-green-50"
+                            className="text-green-600 border-green-600 hover:bg-green-50 h-8"
                             onClick={() => handleSellOrRent(property)}
                           >
                             <DollarSign className="h-4 w-4 mr-1" />
-                            {property.transactionType === "venda" ? "Vender" : "Alugar"}
+                            <span className="hidden xs:inline">{property.transactionType === "venda" ? "Vender" : "Alugar"}</span>
                           </Button>
                         )}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(property)}
+                          className="h-8 px-2"
                         >
                           <Edit2 className="h-4 w-4 text-blue-600" />
                         </Button>
@@ -747,47 +763,48 @@ export default function Properties() {
                           size="sm"
                           onClick={() => handleDelete(property.id)}
                           disabled={deleteMutation.isPending}
+                          className="h-8 px-2"
                         >
                           <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>
-                      </div>
+                      </>
                     )}
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-4">
                     <div>
-                      <p className="text-sm text-gray-600">Tipo</p>
-                      <p className="font-semibold capitalize">{property.type}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Tipo</p>
+                      <p className="font-semibold text-sm sm:text-base capitalize">{property.type}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Transação</p>
-                      <p className="font-semibold capitalize">{property.transactionType}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Transação</p>
+                      <p className="font-semibold text-sm sm:text-base capitalize">{property.transactionType}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Preço</p>
-                      <p className="font-semibold">{formatPrice(property.price)}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Preço</p>
+                      <p className="font-semibold text-sm sm:text-base">{formatPrice(property.price)}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Tamanho</p>
-                      <p className="font-semibold">{property.size} m²</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Tamanho</p>
+                      <p className="font-semibold text-sm sm:text-base">{property.size} m²</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Quartos</p>
-                      <p className="font-semibold">{property.rooms}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Quartos</p>
+                      <p className="font-semibold text-sm sm:text-base">{property.rooms}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Banheiros</p>
-                      <p className="font-semibold">{property.bathrooms}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Banheiros</p>
+                      <p className="font-semibold text-sm sm:text-base">{property.bathrooms}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Status</p>
-                      <p className="font-semibold capitalize">{property.status}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Status</p>
+                      <p className="font-semibold text-sm sm:text-base capitalize">{property.status}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Comissão</p>
-                      <p className="font-semibold">{property.transactionType === "venda" ? "8%" : "10%"}</p>
+                      <p className="text-xs sm:text-sm text-gray-600">Comissão</p>
+                      <p className="font-semibold text-sm sm:text-base">{property.transactionType === "venda" ? "8%" : "10%"}</p>
                     </div>
                   </div>
                   {property.description && (

@@ -1,29 +1,24 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { APP_TITLE, getLoginUrl } from "@/const";
-import { Link } from "wouter";
+import { APP_TITLE } from "@/const";
+import { Link, useLocation } from "wouter";
 import { Building2, Users, BarChart3, LogOut, Settings, LayoutDashboard, Home as HomeIcon } from "lucide-react";
 import { useEffect } from "react";
 
 export default function Home() {
   const { user, isAuthenticated, loading, logout } = useAuth();
+  const [, setLocation] = useLocation();
 
-  // Redirecionar para página de login automaticamente quando não autenticado
+  // Redirecionar para página de login quando não autenticado
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
-      if (!oauthPortalUrl || oauthPortalUrl === "") {
-        // Use relative URL - works in both dev (with proxy) and production
-        window.location.href = "/api/dev-login-page";
-      } else {
-        window.location.href = getLoginUrl();
-      }
+      setLocation("/login");
     }
-  }, [loading, isAuthenticated]);
+  }, [loading, isAuthenticated, setLocation]);
 
   // Mostrar loading enquanto verifica autenticação
-  if (loading || !isAuthenticated) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
@@ -31,10 +26,15 @@ export default function Home() {
             <HomeIcon className="h-12 w-12 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{APP_TITLE}</h1>
-          <p className="text-gray-600">Redirecionando para login...</p>
+          <p className="text-gray-600">Carregando...</p>
         </div>
       </div>
     );
+  }
+
+  // Se não autenticado, não renderizar nada (vai redirecionar)
+  if (!isAuthenticated) {
+    return null;
   }
 
   return (
