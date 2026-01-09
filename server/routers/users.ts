@@ -271,4 +271,63 @@ export const usersRouter = router({
       .orderBy(desc(users.createdAt));
     return result;
   }),
+
+  // Create a new agent (admin only)
+  createAgent: adminProcedure
+    .input(
+      z.object({
+        name: z.string().min(1, "Nome é obrigatório"),
+        email: z.string().email("Email inválido"),
+        phone: z.string().optional(),
+        creci: z.string().min(1, "CRECI é obrigatório para corretores"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verificar se o email já existe
+      const [existingUser] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.email, input.email))
+        .limit(1);
+
+      if (existingUser) {
+        throw new Error('Já existe um usuário com este email');
+      }
+
+      // Gerar um openId único para o usuário (será atualizado quando ele fizer login)
+      const openId = `admin-created-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+      await ctx.db
+        .insert(users)
+        .values({
+          openId,
+          name: input.name,
+          email: input.email,
+          phone: input.phone,
+          role: 'agent',
+          isAgent: true,
+          creci: input.creci,
+          loginMethod: 'admin-created',
+        });
+
+      // Buscar o usuário criado
+      const [newUser] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.openId, openId))
+        .limit(1);
+
+      // Registrar no histórico
+      await createAuditLog({
+        ctx,
+        action: 'user_created',
+        entityType: 'user',
+        entityId: newUser.id,
+        entityName: input.name,
+        newValue: { name: input.name, email: input.email, role: 'agent', creci: input.creci },
+        description: `Corretor "${input.name}" criado pelo administrador`,
+      });
+
+      return { id: newUser.id, success: true };
+    }),
 });
