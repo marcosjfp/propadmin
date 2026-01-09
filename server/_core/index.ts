@@ -4,7 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import * as trpcExpress from '@trpc/server/adapters/express';
 import { appRouter } from '../routers/index.js';
-import { createContext } from '../context.js';
+import { createContext, createJWT } from '../context.js';
 import { testConnection } from '../db.js';
 import { COOKIE_NAME } from '../../shared/const.js';
 import path from 'path';
@@ -109,25 +109,26 @@ app.get('/api/dev-login', (req, res) => {
   
   // Map role to user ID from database
   const userConfig = {
-    agent: { id: 1, name: 'Agente Teste', email: 'agente@teste.com', role: 'agent' as const, creci: 'CRECI-12345' },
-    admin: { id: 2, name: 'Administrador', email: 'admin@teste.com', role: 'admin' as const, creci: null },
-    user: { id: 3, name: 'Usuário Comum', email: 'user@teste.com', role: 'user' as const, creci: null },
+    agent: { id: 1, name: 'Agente Teste', email: 'agente@teste.com', role: 'agent' as const, creci: 'CRECI-12345', isAgent: true },
+    admin: { id: 2, name: 'Administrador', email: 'admin@teste.com', role: 'admin' as const, creci: null, isAgent: false },
+    user: { id: 3, name: 'Usuário Comum', email: 'user@teste.com', role: 'user' as const, creci: null, isAgent: false },
   };
 
   const mockUser = userConfig[role as keyof typeof userConfig] || userConfig.agent;
 
-  // Set session cookie
-  const sessionData = JSON.stringify({
-    ...mockUser,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  // Criar token JWT seguro
+  const jwtToken = createJWT({
+    id: mockUser.id,
+    email: mockUser.email,
+    role: mockUser.role,
+    isAgent: mockUser.isAgent,
   });
   
-  console.log(`🔐 Setting session cookie for user: ${mockUser.name} (${mockUser.role})`);
+  console.log(`🔐 Setting JWT session cookie for user: ${mockUser.name} (${mockUser.role})`);
   
   // Cookie settings for production
   const isProduction = process.env.NODE_ENV === 'production';
-  res.cookie(COOKIE_NAME, sessionData, {
+  res.cookie(COOKIE_NAME, jwtToken, {
     httpOnly: true,
     secure: isProduction,
     sameSite: 'lax', // 'lax' works for same-site redirects

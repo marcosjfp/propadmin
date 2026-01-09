@@ -37,6 +37,7 @@
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.31.2",
     "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.9.0",
     "superjson": "^2.2.1",
     "tsx": "^4.11.0",
@@ -44,6 +45,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "drizzle-kit": "^0.20.14"
   }
 }

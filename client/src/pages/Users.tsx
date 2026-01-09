@@ -20,13 +20,27 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Link } from "wouter";
-import { ArrowLeft, Trash2, UserCheck } from "lucide-react";
+import { ArrowLeft, Trash2, UserCheck, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
+import { ErrorState, LoadingState } from "@/components/StateComponents";
 
 export default function Users() {
   const { user } = useAuth();
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{ id: number; name: string } | null>(null);
   const [creci, setCreci] = useState("");
 
   const usersQuery = trpc.users.list.useQuery();
@@ -52,33 +66,41 @@ export default function Users() {
     );
   }
 
-  const handleDelete = async (id: number) => {
-    if (confirm("Tem certeza que deseja deletar este usuário?")) {
-      try {
-        await deleteMutation.mutateAsync({ id });
-        alert("Usuário deletado");
-        usersQuery.refetch();
-      } catch (error) {
-        alert("Falha ao deletar usuário");
-      }
+  const openDeleteDialog = (id: number, name: string) => {
+    setUserToDelete({ id, name });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!userToDelete) return;
+    
+    try {
+      await deleteMutation.mutateAsync({ id: userToDelete.id });
+      toast.success("Usuário deletado com sucesso");
+      usersQuery.refetch();
+    } catch (error: any) {
+      toast.error(error?.message || "Falha ao deletar usuário");
+    } finally {
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
     }
   };
 
   const handlePromoteToAgent = async (userId: number) => {
     if (!creci.trim()) {
-      alert("Por favor, insira o número CRECI");
+      toast.warning("Por favor, insira o número CRECI");
       return;
     }
 
     try {
       await promoteMutation.mutateAsync({ id: userId, creci });
-      alert("Usuário promovido a agente");
+      toast.success("Usuário promovido a agente com sucesso");
       setPromoteDialogOpen(false);
       setCreci("");
       setSelectedUser(null);
       usersQuery.refetch();
-    } catch (error) {
-      alert("Falha ao promover usuário");
+    } catch (error: any) {
+      toast.error(error?.message || "Falha ao promover usuário");
     }
   };
 
@@ -88,10 +110,10 @@ export default function Users() {
         id: userId,
         role: newRole as "user" | "agent" | "admin",
       });
-      alert("Papel atualizado");
+      toast.success("Papel atualizado com sucesso");
       usersQuery.refetch();
-    } catch (error) {
-      alert("Falha ao atualizar papel");
+    } catch (error: any) {
+      toast.error(error?.message || "Falha ao atualizar papel");
     }
   };
 
@@ -111,9 +133,12 @@ export default function Users() {
 
       <div className="container mx-auto px-4 py-4 sm:py-8">
         {usersQuery.isLoading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600">Carregando usuários...</p>
-          </div>
+          <LoadingState message="Carregando usuários..." />
+        ) : usersQuery.isError ? (
+          <ErrorState 
+            message="Erro ao carregar usuários" 
+            onRetry={() => usersQuery.refetch()} 
+          />
         ) : usersQuery.data && usersQuery.data.length > 0 ? (
           <div className="space-y-4">
             {usersQuery.data.map((u) => (
@@ -168,8 +193,9 @@ export default function Users() {
                         variant="ghost"
                         size="sm"
                         className="h-8"
-                        onClick={() => handleDelete(u.id)}
+                        onClick={() => openDeleteDialog(u.id, u.name || "este usuário")}
                         disabled={deleteMutation.isPending}
+                        aria-label={`Deletar usuário ${u.name || "sem nome"}`}
                       >
                         <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
@@ -216,6 +242,27 @@ export default function Users() {
           </Card>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja deletar {userToDelete?.name}? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending ? "Deletando..." : "Deletar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

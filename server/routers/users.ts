@@ -62,14 +62,14 @@ export const usersRouter = router({
       return user;
     }),
 
-  // Create a new user (for testing - in production use proper auth)
-  create: publicProcedure
+  // Create a new user (admin only - protegido para evitar criação não autorizada)
+  create: adminProcedure
     .input(
       z.object({
         openId: z.string().min(1),
-        name: z.string().optional(),
-        email: z.string().email().optional(),
-        phone: z.string().optional(),
+        name: z.string().trim().min(2).max(100).optional(),
+        email: z.string().email().toLowerCase().optional(),
+        phone: z.string().regex(/^[\d\s\-()]+$/).optional(),
         loginMethod: z.string().optional(),
         role: z.enum(['user', 'agent', 'admin']).default('user'),
         isAgent: z.boolean().default(false),
@@ -77,6 +77,30 @@ export const usersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Verificar se já existe usuário com mesmo openId
+      const [existing] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.openId, input.openId))
+        .limit(1);
+      
+      if (existing) {
+        throw new Error('Usuário já existe com este identificador');
+      }
+
+      // Verificar email duplicado
+      if (input.email) {
+        const [emailExists] = await ctx.db
+          .select()
+          .from(users)
+          .where(eq(users.email, input.email))
+          .limit(1);
+        
+        if (emailExists) {
+          throw new Error('Email já está em uso');
+        }
+      }
+
       await ctx.db
         .insert(users)
         .values(input);
@@ -87,6 +111,17 @@ export const usersRouter = router({
         .from(users)
         .where(eq(users.openId, input.openId))
         .limit(1);
+
+      // Registrar no histórico
+      await createAuditLog({
+        ctx,
+        action: 'user_created',
+        entityType: 'user',
+        entityId: user.id,
+        entityName: user.name || user.email || 'Usuário',
+        newValue: { role: input.role, isAgent: input.isAgent },
+        description: `Usuário "${user.name || user.email}" criado pelo administrador`,
+      });
       
       return { id: user.id };
     }),
@@ -137,29 +172,36 @@ export const usersRouter = router({
   delete: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
+      // Impedir admin de deletar a si mesmo
+      if (input.id === ctx.user.id) {
+        throw new Error('Você não pode deletar sua própria conta');
+      }
+
       // Buscar usuário antes de deletar para log
       const [userToDelete] = await ctx.db
         .select()
         .from(users)
         .where(eq(users.id, input.id))
         .limit(1);
+
+      if (!userToDelete) {
+        throw new Error('Usuário não encontrado');
+      }
       
       await ctx.db
         .delete(users)
         .where(eq(users.id, input.id));
 
       // Registrar no histórico
-      if (userToDelete) {
-        await createAuditLog({
-          ctx,
-          action: 'user_deleted',
-          entityType: 'user',
-          entityId: input.id,
-          entityName: userToDelete.name || userToDelete.email || `User #${input.id}`,
-          previousValue: userToDelete,
-          description: `Usuário "${userToDelete.name || userToDelete.email}" excluído`,
-        });
-      }
+      await createAuditLog({
+        ctx,
+        action: 'user_deleted',
+        entityType: 'user',
+        entityId: input.id,
+        entityName: userToDelete.name || userToDelete.email || `User #${input.id}`,
+        previousValue: userToDelete,
+        description: `Usuário "${userToDelete.name || userToDelete.email}" excluído`,
+      });
 
       return { success: true };
     }),
@@ -225,10 +267,20 @@ export const usersRouter = router({
     .input(
       z.object({
         id: z.number(),
-        creci: z.string().min(1),
+        // Validação CRECI: formato CRECI-XX-NNNNNN ou variações comuns
+        creci: z.string()
+          .min(3, "CRECI deve ter pelo menos 3 caracteres")
+          .max(20, "CRECI deve ter no máximo 20 caracteres")
+          .regex(
+            /^(CRECI[-/]?)?([A-Z]{2}[-/]?)?\d{3,8}[-/]?[A-Z]?$/i,
+            "Formato CRECI inválido. Exemplos válidos: 123456, CRECI-SP-123456, CRECI/RJ/12345"
+          ),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Normalizar CRECI para formato padrão
+      const normalizedCreci = input.creci.toUpperCase().replace(/\s/g, '');
+      
       // Buscar usuário atual para log
       const [currentUser] = await ctx.db
         .select()
@@ -241,7 +293,7 @@ export const usersRouter = router({
         .set({
           role: 'agent',
           isAgent: true,
-          creci: input.creci,
+          creci: normalizedCreci,
         })
         .where(eq(users.id, input.id));
 
@@ -254,8 +306,8 @@ export const usersRouter = router({
           entityId: input.id,
           entityName: currentUser.name || currentUser.email || `User #${input.id}`,
           previousValue: { role: currentUser.role, isAgent: currentUser.isAgent },
-          newValue: { role: 'agent', isAgent: true, creci: input.creci },
-          description: `Usuário "${currentUser.name || currentUser.email}" promovido a corretor com CRECI ${input.creci}`,
+          newValue: { role: 'agent', isAgent: true, creci: normalizedCreci },
+          description: `Usuário "${currentUser.name || currentUser.email}" promovido a corretor com CRECI ${normalizedCreci}`,
         });
       }
 

@@ -7,7 +7,7 @@ import type { Context } from '../context.js';
 // Tipos de ação para tipagem
 export type AuditAction = 
   | "user_created" | "user_updated" | "user_deleted" | "user_role_changed" | "user_login" | "user_logout"
-  | "property_created" | "property_updated" | "property_deleted" | "property_status_changed" | "property_sold" | "property_rented"
+  | "property_created" | "property_updated" | "property_deleted" | "property_status_changed" | "property_sold" | "property_rented" | "property_assigned" | "property_commission_changed" | "property_approved" | "property_rejected"
   | "image_uploaded" | "image_deleted" | "image_primary_changed"
   | "commission_created" | "commission_status_changed" | "commission_paid" | "commission_cancelled";
 

@@ -86,6 +86,14 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
           continue;
         }
 
+        // Validar tipos permitidos
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+          toast.error(`${file.name}: Tipo não permitido. Use JPEG, PNG, WebP ou GIF`);
+          errorCount++;
+          continue;
+        }
+
         // Validar tamanho (máx 5MB)
         if (file.size > 5 * 1024 * 1024) {
           toast.error(`${file.name} é muito grande. Máximo 5MB.`);
@@ -103,7 +111,7 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
             base64Data: base64,
             filename,
             originalName: file.name,
-            mimeType: file.type,
+            mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
             size: file.size,
             isPrimary: images.length === 0 && i === 0, // Primeira imagem é principal
           });
