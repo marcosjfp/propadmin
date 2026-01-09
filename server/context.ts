@@ -48,10 +48,14 @@ export async function createContext({ req, res }: trpcExpress.CreateExpressConte
   
   // Try to get user from cookie (JWT)
   const sessionCookie = req.cookies?.[COOKIE_NAME];
+  console.log('🔍 Session cookie exists:', !!sessionCookie);
+  
   if (sessionCookie) {
     try {
       // Primeiro tenta como JWT
       const decoded = verifyJWT(sessionCookie);
+      console.log('🔐 JWT decoded:', decoded ? { id: decoded.id, role: decoded.role } : 'null');
+      
       if (decoded) {
         // Validar que o usuário ainda existe no banco
         const [dbUser] = await db
@@ -59,6 +63,8 @@ export async function createContext({ req, res }: trpcExpress.CreateExpressConte
           .from(users)
           .where(eq(users.id, decoded.id))
           .limit(1);
+        
+        console.log('👤 DB User found:', dbUser ? { id: dbUser.id, role: dbUser.role, name: dbUser.name } : 'null');
         
         if (dbUser) {
           user = {
