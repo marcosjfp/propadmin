@@ -30,9 +30,8 @@ import { Link, useLocation } from "wouter";
 import { ArrowLeft, Plus, Trash2, Edit2, DollarSign, Search, X, Eye, Filter, ImageIcon, UserPlus, Percent, CheckCircle, XCircle, Clock } from "lucide-react";
 
 export default function Properties() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
-  console.log("User atual:", user);
   const [open, setOpen] = useState(false);
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
@@ -79,19 +78,37 @@ export default function Properties() {
     status: "ativa" as "ativa" | "vendida" | "alugada" | "inativa",
   });
 
+  // Redirecionar para login se não autenticado
+  if (!authLoading && !user) {
+    setLocation("/login");
+    return null;
+  }
+
+  // Mostrar loading enquanto verifica autenticação
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-600">Carregando...</p>
+      </div>
+    );
+  }
+
   // Queries devem ser chamadas incondicionalmente - usar enabled para controlar execução
+  const isAgent = user?.role === "agent";
+  const isAdmin = user?.role === "admin";
+  
   const myPropertiesQuery = trpc.properties.myProperties.useQuery(undefined, {
-    enabled: user?.role === "agent",
+    enabled: isAgent === true,
   });
   const allPropertiesQuery = trpc.properties.listAll.useQuery(undefined, {
-    enabled: user?.role === "admin",
+    enabled: isAdmin === true,
   });
   
   // Selecionar a query correta baseada no role
-  const propertiesQuery = user?.role === "agent" ? myPropertiesQuery : allPropertiesQuery;
+  const propertiesQuery = isAgent ? myPropertiesQuery : allPropertiesQuery;
   
   const pendingQuery = trpc.properties.listPending.useQuery(undefined, {
-    enabled: user?.role === "admin",
+    enabled: isAdmin === true,
   });
   const createMutation = trpc.properties.create.useMutation();
   const updateMutation = trpc.properties.update.useMutation();
