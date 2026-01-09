@@ -5,7 +5,9 @@ import cookieParser from 'cookie-parser';
 import * as trpcExpress from '@trpc/server/adapters/express';
 import { appRouter } from '../routers/index.js';
 import { createContext, createJWT } from '../context.js';
-import { testConnection } from '../db.js';
+import { testConnection, db } from '../db.js';
+import { users } from '../../drizzle/schema.js';
+import { eq } from 'drizzle-orm';
 import { COOKIE_NAME } from '../../shared/const.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -103,43 +105,51 @@ app.use(
 );
 
 // Development login endpoint - Creates a mock authenticated session
-app.get('/api/dev-login', (req, res) => {
-  // Check query param for role (default: agent)
-  const role = req.query.role as string || 'agent';
-  
-  // Map role to user ID from database
-  const userConfig = {
-    agent: { id: 1, name: 'Agente Teste', email: 'agente@teste.com', role: 'agent' as const, creci: 'CRECI-12345', isAgent: true },
-    admin: { id: 2, name: 'Administrador', email: 'admin@teste.com', role: 'admin' as const, creci: null, isAgent: false },
-    user: { id: 3, name: 'Usuário Comum', email: 'user@teste.com', role: 'user' as const, creci: null, isAgent: false },
-  };
+app.get('/api/dev-login', async (req, res) => {
+  try {
+    // Check query param for role (default: agent)
+    const role = req.query.role as string || 'agent';
+    
+    // Buscar usuário do banco de dados pelo role
+    const [dbUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.role, role))
+      .limit(1);
+    
+    if (!dbUser) {
+      console.error(`❌ No user found with role: ${role}`);
+      return res.status(404).send(`Usuário com role '${role}' não encontrado no banco de dados`);
+    }
 
-  const mockUser = userConfig[role as keyof typeof userConfig] || userConfig.agent;
+    // Criar token JWT seguro
+    const jwtToken = createJWT({
+      id: dbUser.id,
+      email: dbUser.email,
+      role: dbUser.role,
+      isAgent: dbUser.isAgent,
+    });
+    
+    console.log(`🔐 Setting JWT session cookie for user: ${dbUser.name} (${dbUser.role}) [ID: ${dbUser.id}]`);
+    
+    // Cookie settings for production
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.cookie(COOKIE_NAME, jwtToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax', // 'lax' works for same-site redirects
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      path: '/',
+    });
 
-  // Criar token JWT seguro
-  const jwtToken = createJWT({
-    id: mockUser.id,
-    email: mockUser.email,
-    role: mockUser.role,
-    isAgent: mockUser.isAgent,
-  });
-  
-  console.log(`🔐 Setting JWT session cookie for user: ${mockUser.name} (${mockUser.role})`);
-  
-  // Cookie settings for production
-  const isProduction = process.env.NODE_ENV === 'production';
-  res.cookie(COOKIE_NAME, jwtToken, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: 'lax', // 'lax' works for same-site redirects
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-    path: '/',
-  });
-
-  // In production, redirect to root path (relative redirect)
-  // This ensures the cookie domain matches
-  console.log(`🔄 Redirecting to /`);
-  res.redirect('/');
+    // In production, redirect to root path (relative redirect)
+    // This ensures the cookie domain matches
+    console.log(`🔄 Redirecting to /`);
+    res.redirect('/');
+  } catch (error) {
+    console.error('❌ Error in dev-login:', error);
+    res.status(500).send('Erro ao fazer login');
+  }
 });
 
 // Dev login page with role selection
