@@ -41,8 +41,14 @@ export const properties = mysqlTable("properties", {
   city: varchar("city", { length: 100 }).notNull(),
   state: varchar("state", { length: 2 }).notNull(),
   zipCode: varchar("zipCode", { length: 10 }),
-  agentId: int("agentId").notNull().references(() => users.id, { onDelete: "cascade" }), // Foreign key para users
-  status: mysqlEnum("status", ["ativa", "vendida", "alugada", "inativa"]).default("ativa").notNull(),
+  agentId: int("agentId").notNull().references(() => users.id, { onDelete: "cascade" }), // Foreign key para users - quem criou
+  assignedAgentId: int("assignedAgentId").references(() => users.id, { onDelete: "set null" }), // Corretor atribuído para gerenciar o imóvel
+  customCommissionRate: int("customCommissionRate"), // Taxa de comissão customizada (ex: 500 = 5%), null = usa taxa padrão
+  status: mysqlEnum("status", ["pendente", "ativa", "vendida", "alugada", "inativa", "rejeitada"]).default("pendente").notNull(),
+  isApproved: boolean("isApproved").default(false).notNull(), // Se o imóvel foi aprovado pelo admin
+  approvedBy: int("approvedBy").references(() => users.id, { onDelete: "set null" }), // Admin que aprovou
+  approvedAt: timestamp("approvedAt"), // Data de aprovação
+  rejectionReason: text("rejectionReason"), // Motivo da rejeição, se aplicável
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -117,6 +123,10 @@ export const auditLogs = mysqlTable("audit_logs", {
     "property_status_changed",
     "property_sold",
     "property_rented",
+    "property_assigned",
+    "property_commission_changed",
+    "property_approved",
+    "property_rejected",
     
     // Imagens
     "image_uploaded",

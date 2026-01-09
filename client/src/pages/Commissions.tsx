@@ -1,5 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { systemToast } from "@/lib/toast";
+import { formatPrice, getStatusLabel } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -11,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Link } from "wouter";
 import { ArrowLeft, CheckCircle, Clock, XCircle } from "lucide-react";
+import { ErrorState, LoadingState } from "@/components/StateComponents";
 
 export default function Commissions() {
   const { user } = useAuth();
@@ -19,7 +22,7 @@ export default function Commissions() {
 
   const handleStatusChange = async (commissionId: number, newStatus: string) => {
     if (user?.role !== "admin") {
-      alert("Apenas administradores podem alterar status");
+      systemToast.warning("Apenas administradores podem alterar status");
       return;
     }
 
@@ -28,18 +31,13 @@ export default function Commissions() {
         id: commissionId,
         status: newStatus as "pendente" | "paga" | "cancelada",
       });
-      alert("Status atualizado");
+      
+      const commission = commissionsQuery.data?.find((c: any) => c.id === commissionId);
+      systemToast.commissionStatusChanged(newStatus, commission?.property?.title || "Imóvel");
       commissionsQuery.refetch();
-    } catch (error) {
-      alert("Falha ao atualizar status");
+    } catch (error: any) {
+      systemToast.error(error?.message || "Falha ao atualizar status");
     }
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(price / 100);
   };
 
   const getStatusIcon = (status: string) => {
@@ -52,19 +50,6 @@ export default function Commissions() {
         return <XCircle className="h-5 w-5 text-red-600" />;
       default:
         return null;
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "paga":
-        return "Paga";
-      case "pendente":
-        return "Pendente";
-      case "cancelada":
-        return "Cancelada";
-      default:
-        return status;
     }
   };
 
@@ -119,9 +104,12 @@ export default function Commissions() {
         </div>
 
         {commissionsQuery.isLoading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-600">Carregando comissões...</p>
-          </div>
+          <LoadingState message="Carregando comissões..." />
+        ) : commissionsQuery.isError ? (
+          <ErrorState 
+            message="Erro ao carregar comissões" 
+            onRetry={() => commissionsQuery.refetch()} 
+          />
         ) : commissionsQuery.data && commissionsQuery.data.length > 0 ? (
           <div className="space-y-4">
             {commissionsQuery.data.map((commission) => (

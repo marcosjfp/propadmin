@@ -54,7 +54,7 @@ export const commissionsRouter = router({
     return result;
   }),
 
-  // Get a single commission by ID
+  // Get a single commission by ID (verifica permissão)
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
@@ -63,6 +63,16 @@ export const commissionsRouter = router({
         .from(commissions)
         .where(eq(commissions.id, input.id))
         .limit(1);
+      
+      if (!commission) {
+        throw new Error('Comissão não encontrada');
+      }
+
+      // Verificar permissão: admin pode ver qualquer uma, agente só as próprias
+      if (ctx.user.role !== 'admin' && commission.agentId !== ctx.user.id) {
+        throw new Error('Você não tem permissão para ver esta comissão');
+      }
+
       return commission;
     }),
 
@@ -72,20 +82,37 @@ export const commissionsRouter = router({
       z.object({
         propertyId: z.number(),
         transactionType: z.enum(['venda', 'aluguel']),
-        transactionAmount: z.number().int().positive(),
-        commissionRate: z.number().int().min(0).max(10000), // 0% to 100% (in basis points)
+        transactionAmount: z.number().int().min(1000, 'Valor mínimo: R$ 10,00').max(100000000000, 'Valor máximo excedido'), // Min R$10, Max R$1B
+        commissionRate: z.number().int().min(0).max(10000).optional(), // Se não fornecido, usa o da propriedade ou padrão
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Calculate commission amount
-      const commissionAmount = Math.floor((input.transactionAmount * input.commissionRate) / 10000);
-
-      // Buscar info da propriedade para o log
+      // Buscar info da propriedade para o log e para verificar comissão customizada
       const [property] = await ctx.db
         .select()
         .from(properties)
         .where(eq(properties.id, input.propertyId))
         .limit(1);
+
+      if (!property) {
+        throw new Error('Propriedade não encontrada');
+      }
+
+      // Determinar taxa de comissão:
+      // 1. Se fornecido no input, usa o do input
+      // 2. Se há customCommissionRate na propriedade, usa esse
+      // 3. Caso contrário, usa padrão (800 para venda = 8%, 1000 para aluguel = 10%)
+      let commissionRate: number;
+      if (input.commissionRate !== undefined) {
+        commissionRate = input.commissionRate;
+      } else if (property.customCommissionRate !== null) {
+        commissionRate = property.customCommissionRate;
+      } else {
+        commissionRate = input.transactionType === 'venda' ? 800 : 1000;
+      }
+
+      // Calculate commission amount
+      const commissionAmount = Math.floor((input.transactionAmount * commissionRate) / 10000);
 
       await ctx.db
         .insert(commissions)
@@ -94,7 +121,7 @@ export const commissionsRouter = router({
           agentId: ctx.user.id,
           transactionType: input.transactionType,
           transactionAmount: input.transactionAmount,
-          commissionRate: input.commissionRate,
+          commissionRate,
           commissionAmount,
           status: 'pendente',
         });
@@ -114,11 +141,16 @@ export const commissionsRouter = router({
         entityType: 'commission',
         entityId: commission.id,
         entityName: property?.title || `Propriedade #${input.propertyId}`,
-        newValue: { ...input, commissionAmount, id: commission.id },
-        description: `Comissão de R$ ${(commissionAmount / 100).toFixed(2)} criada para ${input.transactionType} do imóvel "${property?.title || input.propertyId}"`,
+        newValue: { ...input, commissionAmount, commissionRate, id: commission.id },
+        description: `Comissão de R$ ${(commissionAmount / 100).toFixed(2)} (${commissionRate / 100}%) criada para ${input.transactionType} do imóvel "${property?.title || input.propertyId}"`,
       });
       
-      return { id: commission.id };
+      return { 
+        id: commission.id,
+        commissionRate,
+        commissionAmount,
+        transactionAmount: input.transactionAmount,
+      };
     }),
 
   // Update commission status (admin only)

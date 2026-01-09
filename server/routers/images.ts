@@ -36,11 +36,13 @@ export const imagesRouter = router({
   create: agentProcedure
     .input(z.object({
       propertyId: z.number(),
-      base64Data: z.string(),
-      filename: z.string(),
-      originalName: z.string(),
-      mimeType: z.string(),
-      size: z.number(),
+      base64Data: z.string().max(7 * 1024 * 1024, 'Imagem muito grande (máx 5MB)'), // ~5MB em base64
+      filename: z.string().max(255),
+      originalName: z.string().max(255),
+      mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif'], {
+        errorMap: () => ({ message: 'Tipo de imagem não permitido. Use: JPEG, PNG, WebP ou GIF' })
+      }),
+      size: z.number().max(5 * 1024 * 1024, 'Arquivo muito grande (máx 5MB)'),
       isPrimary: z.boolean().default(false),
     }))
     .mutation(async ({ ctx, input }) => {

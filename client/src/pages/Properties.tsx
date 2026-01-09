@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { systemToast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import ImageUpload from "@/components/ImageUpload";
 
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, Plus, Trash2, Edit2, DollarSign, Search, X, Eye, Filter, ImageIcon } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Edit2, DollarSign, Search, X, Eye, Filter, ImageIcon, UserPlus, Percent, CheckCircle, XCircle, Clock } from "lucide-react";
 
 export default function Properties() {
   const { user } = useAuth();
@@ -35,9 +36,15 @@ export default function Properties() {
   const [open, setOpen] = useState(false);
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [commissionDialogOpen, setCommissionDialogOpen] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [imagePropertyId, setImagePropertyId] = useState<number | null>(null);
   const [selectedProperty, setSelectedProperty] = useState<any>(null);
   const [transactionAmount, setTransactionAmount] = useState("");
+  const [customCommissionRate, setCustomCommissionRate] = useState<string>("");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   
@@ -75,10 +82,22 @@ export default function Properties() {
   const propertiesQuery = user?.role === "agent" 
     ? trpc.properties.myProperties.useQuery() 
     : trpc.properties.listAll.useQuery();
+  const pendingQuery = trpc.properties.listPending.useQuery(undefined, {
+    enabled: user?.role === "admin",
+  });
   const createMutation = trpc.properties.create.useMutation();
   const updateMutation = trpc.properties.update.useMutation();
   const deleteMutation = trpc.properties.delete.useMutation();
   const createCommissionMutation = trpc.commissions.create.useMutation();
+  const assignAgentMutation = trpc.properties.assignAgent.useMutation();
+  const setCustomCommissionMutation = trpc.properties.setCustomCommission.useMutation();
+  const approveMutation = trpc.properties.approve.useMutation();
+  const rejectMutation = trpc.properties.reject.useMutation();
+  
+  // Query para listar agentes (para admin atribuir)
+  const agentsQuery = trpc.users.list.useQuery(undefined, {
+    enabled: user?.role === "admin",
+  });
 
   const resetForm = () => {
     setFormData({
@@ -186,10 +205,14 @@ export default function Properties() {
           ...propertyData,
           status: formData.status,
         });
-        alert("Propriedade atualizada com sucesso");
+        systemToast.propertyUpdated(formData.title);
       } else {
-        await createMutation.mutateAsync(propertyData);
-        alert("Propriedade criada com sucesso");
+        const result = await createMutation.mutateAsync(propertyData);
+        systemToast.propertyCreated(formData.title, result.needsApproval);
+        
+        // Abrir automaticamente o dialog de imagens após criar o imóvel
+        setImagePropertyId(result.id);
+        setImageDialogOpen(true);
       }
 
       setOpen(false);
@@ -198,18 +221,21 @@ export default function Properties() {
     } catch (error: any) {
       console.error("Erro ao criar/atualizar propriedade:", error);
       const errorMessage = error?.message || error?.data?.message || "Erro desconhecido";
-      alert(editingId ? `Falha ao atualizar propriedade: ${errorMessage}` : `Falha ao criar propriedade: ${errorMessage}`);
+      systemToast.error(errorMessage, {
+        title: editingId ? "Falha ao atualizar" : "Falha ao criar"
+      });
     }
   };
 
   const handleDelete = async (id: number) => {
     if (confirm("Tem certeza que deseja deletar esta propriedade?")) {
       try {
+        const property = propertiesQuery.data?.find((p: any) => p.id === id);
         await deleteMutation.mutateAsync({ id });
-        alert("Propriedade deletada");
+        systemToast.deleted(property?.title || "Propriedade", "Imóvel");
         propertiesQuery.refetch();
-      } catch (error) {
-        alert("Falha ao deletar propriedade");
+      } catch (error: any) {
+        systemToast.error(error?.message || "Falha ao deletar propriedade");
       }
     }
   };
@@ -217,7 +243,19 @@ export default function Properties() {
   const handleSellOrRent = (property: any) => {
     setSelectedProperty(property);
     setTransactionAmount((property.price / 100).toString());
+    // Definir taxa de comissão: customizada ou padrão
+    const defaultRate = property.transactionType === "venda" ? 800 : 1000;
+    const rate = property.customCommissionRate ?? defaultRate;
+    setCustomCommissionRate((rate / 100).toString());
     setSellDialogOpen(true);
+  };
+
+  // Calcular comissão com base na taxa (customizada ou padrão)
+  const getCommissionRate = (property: any): number => {
+    if (property?.customCommissionRate !== null && property?.customCommissionRate !== undefined) {
+      return property.customCommissionRate;
+    }
+    return property?.transactionType === "venda" ? 800 : 1000;
   };
 
   const handleConfirmTransaction = async () => {
@@ -225,21 +263,18 @@ export default function Properties() {
 
     const amount = Math.round(parseFloat(transactionAmount) * 100);
     if (isNaN(amount) || amount <= 0) {
-      alert("Por favor, informe um valor válido");
+      systemToast.warning("Por favor, informe um valor válido");
       return;
     }
 
-    // Taxa de comissão: 8% para venda, 10% para aluguel
-    const commissionRate = selectedProperty.transactionType === "venda" ? 800 : 1000;
     const newStatus = selectedProperty.transactionType === "venda" ? "vendida" : "alugada";
 
     try {
-      // Criar comissão
-      await createCommissionMutation.mutateAsync({
+      // Criar comissão (não passa commissionRate, deixa o backend decidir)
+      const result = await createCommissionMutation.mutateAsync({
         propertyId: selectedProperty.id,
         transactionType: selectedProperty.transactionType,
         transactionAmount: amount,
-        commissionRate,
       });
 
       // Atualizar status do imóvel
@@ -248,8 +283,14 @@ export default function Properties() {
         status: newStatus,
       });
 
-      const commissionValue = (amount * commissionRate) / 10000;
-      alert(`${selectedProperty.transactionType === "venda" ? "Venda" : "Aluguel"} registrado com sucesso!\n\nComissão gerada: ${formatPrice(commissionValue)}`);
+      // Mostrar toast com valores atualizados
+      systemToast.transaction({
+        propertyTitle: selectedProperty.title,
+        transactionType: selectedProperty.transactionType,
+        transactionAmount: result.transactionAmount,
+        commissionRate: result.commissionRate,
+        commissionAmount: result.commissionAmount,
+      });
       
       setSellDialogOpen(false);
       setSelectedProperty(null);
@@ -257,8 +298,123 @@ export default function Properties() {
       propertiesQuery.refetch();
     } catch (error: any) {
       console.error("Erro ao registrar transação:", error);
-      alert("Erro ao registrar transação: " + (error?.message || "Erro desconhecido"));
+      systemToast.error(error?.message || "Erro ao registrar transação");
     }
+  };
+
+  // Handler para atribuir agente
+  const handleAssignAgent = async () => {
+    if (!selectedProperty) return;
+
+    try {
+      const result = await assignAgentMutation.mutateAsync({
+        propertyId: selectedProperty.id,
+        assignedAgentId: selectedAgentId ? parseInt(selectedAgentId) : null,
+      });
+
+      systemToast.propertyAssigned(selectedProperty.title, result.assignedAgentName);
+      
+      setAssignDialogOpen(false);
+      setSelectedProperty(null);
+      setSelectedAgentId("");
+      propertiesQuery.refetch();
+    } catch (error: any) {
+      systemToast.error(error?.message || "Erro ao atribuir corretor");
+    }
+  };
+
+  // Handler para definir comissão customizada
+  const handleSetCustomCommission = async () => {
+    if (!selectedProperty) return;
+
+    const rate = customCommissionRate ? Math.round(parseFloat(customCommissionRate) * 100) : null;
+    
+    if (customCommissionRate && (isNaN(rate!) || rate! < 0 || rate! > 10000)) {
+      systemToast.warning("Taxa de comissão deve estar entre 0% e 100%");
+      return;
+    }
+
+    try {
+      await setCustomCommissionMutation.mutateAsync({
+        propertyId: selectedProperty.id,
+        customCommissionRate: rate,
+      });
+
+      systemToast.commissionChanged(
+        selectedProperty.title, 
+        rate, 
+        selectedProperty.transactionType
+      );
+      
+      setCommissionDialogOpen(false);
+      setSelectedProperty(null);
+      setCustomCommissionRate("");
+      propertiesQuery.refetch();
+    } catch (error: any) {
+      systemToast.error(error?.message || "Erro ao definir comissão");
+    }
+  };
+
+  // Handler para aprovar imóvel
+  const handleApprove = async (property: any) => {
+    try {
+      await approveMutation.mutateAsync({ propertyId: property.id });
+      systemToast.propertyApproved(property.title);
+      propertiesQuery.refetch();
+      pendingQuery.refetch();
+    } catch (error: any) {
+      systemToast.error(error?.message || "Erro ao aprovar imóvel");
+    }
+  };
+
+  // Handler para abrir dialog de rejeição
+  const openRejectDialog = (property: any) => {
+    setSelectedProperty(property);
+    setRejectionReason("");
+    setRejectDialogOpen(true);
+  };
+
+  // Handler para rejeitar imóvel
+  const handleReject = async () => {
+    if (!selectedProperty) return;
+    
+    if (!rejectionReason.trim()) {
+      systemToast.warning("Por favor, informe o motivo da rejeição");
+      return;
+    }
+
+    try {
+      await rejectMutation.mutateAsync({ 
+        propertyId: selectedProperty.id,
+        reason: rejectionReason 
+      });
+      systemToast.propertyRejected(selectedProperty.title, rejectionReason);
+      setRejectDialogOpen(false);
+      setSelectedProperty(null);
+      setRejectionReason("");
+      propertiesQuery.refetch();
+      pendingQuery.refetch();
+    } catch (error: any) {
+      systemToast.error(error?.message || "Erro ao rejeitar imóvel");
+    }
+  };
+
+  // Abrir dialog de atribuição
+  const openAssignDialog = (property: any) => {
+    setSelectedProperty(property);
+    setSelectedAgentId(property.assignedAgentId?.toString() || "");
+    setAssignDialogOpen(true);
+  };
+
+  // Abrir dialog de comissão customizada
+  const openCommissionDialog = (property: any) => {
+    setSelectedProperty(property);
+    setCustomCommissionRate(
+      property.customCommissionRate !== null 
+        ? (property.customCommissionRate / 100).toString() 
+        : ""
+    );
+    setCommissionDialogOpen(true);
   };
 
   const formatPrice = (price: number) => {
@@ -435,6 +591,12 @@ export default function Properties() {
                         <SelectItem value="vendida">Vendida</SelectItem>
                         <SelectItem value="alugada">Alugada</SelectItem>
                         <SelectItem value="inativa">Inativa</SelectItem>
+                        {user?.role === "admin" && (
+                          <>
+                            <SelectItem value="pendente">⏳ Pendente Aprovação</SelectItem>
+                            <SelectItem value="rejeitada">❌ Rejeitada</SelectItem>
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -725,6 +887,31 @@ export default function Properties() {
                       >
                         <Eye className="h-4 w-4 text-gray-600" />
                       </Button>
+                    {/* Botões de aprovação para admin - propriedades pendentes */}
+                    {user?.role === "admin" && property.status === "pendente" && !property.isApproved && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-green-600 border-green-600 hover:bg-green-50 h-8"
+                          onClick={() => handleApprove(property)}
+                          disabled={approveMutation.isPending}
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Aprovar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-600 hover:bg-red-50 h-8"
+                          onClick={() => openRejectDialog(property)}
+                          disabled={rejectMutation.isPending}
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          Rejeitar
+                        </Button>
+                      </>
+                    )}
                     {(user?.role === "agent" || user?.role === "admin") && (
                       <>
                         <Button
@@ -749,6 +936,29 @@ export default function Properties() {
                             <DollarSign className="h-4 w-4 mr-1" />
                             <span className="hidden xs:inline">{property.transactionType === "venda" ? "Vender" : "Alugar"}</span>
                           </Button>
+                        )}
+                        {/* Botões apenas para admin */}
+                        {user?.role === "admin" && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openAssignDialog(property)}
+                              title="Atribuir corretor"
+                              className="h-8 px-2"
+                            >
+                              <UserPlus className="h-4 w-4 text-blue-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openCommissionDialog(property)}
+                              title="Comissão customizada"
+                              className="h-8 px-2"
+                            >
+                              <Percent className="h-4 w-4 text-orange-600" />
+                            </Button>
+                          </>
                         )}
                         <Button
                           variant="ghost"
@@ -800,11 +1010,32 @@ export default function Properties() {
                     </div>
                     <div>
                       <p className="text-xs sm:text-sm text-gray-600">Status</p>
-                      <p className="font-semibold text-sm sm:text-base capitalize">{property.status}</p>
+                      <p className="font-semibold text-sm sm:text-base flex items-center gap-2">
+                        {property.status === "pendente" && (
+                          <span className="flex items-center gap-1 text-yellow-600">
+                            <Clock className="h-4 w-4" />
+                            Pendente
+                          </span>
+                        )}
+                        {property.status === "rejeitada" && (
+                          <span className="flex items-center gap-1 text-red-600">
+                            <XCircle className="h-4 w-4" />
+                            Rejeitada
+                          </span>
+                        )}
+                        {property.status !== "pendente" && property.status !== "rejeitada" && (
+                          <span className="capitalize">{property.status}</span>
+                        )}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs sm:text-sm text-gray-600">Comissão</p>
-                      <p className="font-semibold text-sm sm:text-base">{property.transactionType === "venda" ? "8%" : "10%"}</p>
+                      <p className="font-semibold text-sm sm:text-base">
+                        {property.customCommissionRate !== null && property.customCommissionRate !== undefined
+                          ? <span className="text-orange-600">{property.customCommissionRate / 100}% <span className="text-xs">(custom)</span></span>
+                          : <span>{property.transactionType === "venda" ? "8%" : "10%"}</span>
+                        }
+                      </p>
                     </div>
                   </div>
                   {property.description && (
@@ -818,15 +1049,35 @@ export default function Properties() {
                     {property.hasLivingRoom && <span className="bg-gray-100 px-2 py-1 rounded">Sala de estar</span>}
                     {property.hasKitchen && <span className="bg-gray-100 px-2 py-1 rounded">Cozinha</span>}
                   </div>
-                  {property.agentName && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <p className="text-sm text-gray-600">Agente Responsável</p>
-                      <p className="font-semibold">{property.agentName}</p>
-                      {property.agentCreci && (
-                        <p className="text-xs text-gray-500">CRECI: {property.agentCreci}</p>
-                      )}
-                    </div>
-                  )}
+                  <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Mostrar motivo de rejeição se houver */}
+                    {property.status === "rejeitada" && property.rejectionReason && (
+                      <div className="col-span-full bg-red-50 p-3 rounded-lg border border-red-200">
+                        <p className="text-sm text-red-600 font-semibold">Motivo da Rejeição:</p>
+                        <p className="text-sm text-red-700">{property.rejectionReason}</p>
+                      </div>
+                    )}
+                    {property.agentName && (
+                      <div>
+                        <p className="text-sm text-gray-600">Agente Criador</p>
+                        <p className="font-semibold">{property.agentName}</p>
+                        {property.agentCreci && (
+                          <p className="text-xs text-gray-500">CRECI: {property.agentCreci}</p>
+                        )}
+                      </div>
+                    )}
+                    {property.assignedAgentId && (
+                      <div>
+                        <p className="text-sm text-gray-600">Corretor Atribuído</p>
+                        <p className="font-semibold text-blue-600">
+                          {property.assignedAgentName || `Corretor #${property.assignedAgentId}`}
+                        </p>
+                        <Badge variant="secondary" className="text-xs mt-1">
+                          Responsável pela venda
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -878,17 +1129,24 @@ export default function Properties() {
             </div>
 
             <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-blue-600">Taxa de Comissão</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-blue-600">Taxa de Comissão</p>
+                {selectedProperty?.customCommissionRate !== null && selectedProperty?.customCommissionRate !== undefined && (
+                  <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+                    Customizada
+                  </Badge>
+                )}
+              </div>
               <p className="text-lg font-bold text-blue-700">
-                {selectedProperty?.transactionType === "venda" ? "8%" : "10%"}
+                {selectedProperty && (getCommissionRate(selectedProperty) / 100)}%
               </p>
               <p className="text-sm text-blue-600 mt-2">Valor Estimado da Comissão</p>
               <p className="text-xl font-bold text-blue-700">
-                {transactionAmount && !isNaN(parseFloat(transactionAmount))
+                {transactionAmount && !isNaN(parseFloat(transactionAmount)) && selectedProperty
                   ? formatPrice(
                       Math.round(
                         parseFloat(transactionAmount) * 100 *
-                        (selectedProperty?.transactionType === "venda" ? 0.08 : 0.10)
+                        (getCommissionRate(selectedProperty) / 10000)
                       )
                     )
                   : "R$ 0,00"}
@@ -911,7 +1169,10 @@ export default function Properties() {
       {/* Image Management Dialog */}
       <Dialog open={imageDialogOpen} onOpenChange={(open) => {
         setImageDialogOpen(open);
-        if (!open) setImagePropertyId(null);
+        if (!open) {
+          setImagePropertyId(null);
+          propertiesQuery.refetch(); // Atualizar lista ao fechar
+        }
       }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -920,18 +1181,248 @@ export default function Properties() {
               Gerenciar Imagens do Imóvel
             </DialogTitle>
             <DialogDescription>
-              Adicione até 10 imagens. A primeira imagem será a principal por padrão.
+              Adicione até 10 imagens para tornar seu imóvel mais atraente. A primeira imagem será a principal por padrão.
             </DialogDescription>
           </DialogHeader>
           {imagePropertyId && (
-            <ImageUpload 
-              propertyId={imagePropertyId} 
-              onImagesChange={() => {
-                // Refetch property data if needed
-                propertiesQuery.refetch();
-              }}
-            />
+            <>
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 mb-4">
+                <p className="text-sm text-blue-700">
+                  💡 <strong>Dica:</strong> Imóveis com fotos de qualidade recebem até 3x mais visualizações!
+                </p>
+              </div>
+              <ImageUpload 
+                propertyId={imagePropertyId} 
+                onImagesChange={() => {
+                  // Refetch property data if needed
+                  propertiesQuery.refetch();
+                }}
+              />
+            </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Atribuição de Corretor (Admin) */}
+      <Dialog open={assignDialogOpen} onOpenChange={(open) => {
+        setAssignDialogOpen(open);
+        if (!open) {
+          setSelectedProperty(null);
+          setSelectedAgentId("");
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-blue-600" />
+              Atribuir Corretor ao Imóvel
+            </DialogTitle>
+            <DialogDescription>
+              {selectedProperty?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm text-gray-600">Imóvel Selecionado</p>
+              <p className="font-semibold">{selectedProperty?.title}</p>
+              <p className="text-sm text-gray-500">{selectedProperty?.address}, {selectedProperty?.city}</p>
+            </div>
+            
+            <div>
+              <Label>Corretor Responsável</Label>
+              <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um corretor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Nenhum (remover atribuição)</SelectItem>
+                  {agentsQuery.data
+                    ?.filter((agent: any) => agent.role === "agent" || agent.role === "admin")
+                    .map((agent: any) => (
+                      <SelectItem key={agent.id} value={agent.id.toString()}>
+                        {agent.name || agent.email || `Usuário #${agent.id}`}
+                        {agent.creci && ` (CRECI: ${agent.creci})`}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500 mt-1">
+                O corretor atribuído terá acesso exclusivo a este imóvel para gerenciar comissões.
+              </p>
+            </div>
+
+            {selectedProperty?.assignedAgentId && (
+              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                <p className="text-sm text-yellow-700">
+                  Este imóvel já está atribuído a um corretor. 
+                  {selectedAgentId === "" && " Ao confirmar sem selecionar um corretor, a atribuição será removida."}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setAssignDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                onClick={handleAssignAgent}
+                disabled={assignAgentMutation.isPending}
+              >
+                {assignAgentMutation.isPending ? "Salvando..." : "Confirmar Atribuição"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Comissão Customizada (Admin) */}
+      <Dialog open={commissionDialogOpen} onOpenChange={(open) => {
+        setCommissionDialogOpen(open);
+        if (!open) {
+          setSelectedProperty(null);
+          setCustomCommissionRate("");
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Percent className="h-5 w-5 text-orange-600" />
+              Comissão Customizada
+            </DialogTitle>
+            <DialogDescription>
+              {selectedProperty?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm text-gray-600">Imóvel Selecionado</p>
+              <p className="font-semibold">{selectedProperty?.title}</p>
+              <p className="text-sm text-gray-500">
+                Tipo de transação: {selectedProperty?.transactionType === "venda" ? "Venda" : "Aluguel"}
+              </p>
+            </div>
+            
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <p className="text-sm text-blue-600">Taxa Padrão</p>
+              <p className="text-lg font-bold text-blue-700">
+                {selectedProperty?.transactionType === "venda" ? "8%" : "10%"}
+              </p>
+            </div>
+
+            <div>
+              <Label>Taxa de Comissão Customizada (%)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={customCommissionRate}
+                onChange={(e) => setCustomCommissionRate(e.target.value)}
+                placeholder="Ex: 6.5 para 6.5%"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Deixe em branco para usar a taxa padrão. Use valores entre 0 e 100.
+              </p>
+            </div>
+
+            {selectedProperty?.customCommissionRate !== null && selectedProperty?.customCommissionRate !== undefined && (
+              <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                <p className="text-sm text-orange-700">
+                  Taxa atual customizada: <strong>{selectedProperty.customCommissionRate / 100}%</strong>
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setCommissionDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-orange-600 hover:bg-orange-700"
+                onClick={handleSetCustomCommission}
+                disabled={setCustomCommissionMutation.isPending}
+              >
+                {setCustomCommissionMutation.isPending ? "Salvando..." : "Salvar Comissão"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Rejeição de Imóvel (Admin) */}
+      <Dialog open={rejectDialogOpen} onOpenChange={(open) => {
+        setRejectDialogOpen(open);
+        if (!open) {
+          setSelectedProperty(null);
+          setRejectionReason("");
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-600" />
+              Rejeitar Imóvel
+            </DialogTitle>
+            <DialogDescription>
+              {selectedProperty?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <p className="text-sm text-gray-600">Imóvel a ser rejeitado</p>
+              <p className="font-semibold">{selectedProperty?.title}</p>
+              <p className="text-sm text-gray-500">{selectedProperty?.address}, {selectedProperty?.city}</p>
+              {selectedProperty?.agentName && (
+                <p className="text-sm text-gray-500 mt-2">Criado por: <strong>{selectedProperty.agentName}</strong></p>
+              )}
+            </div>
+            
+            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+              <p className="text-sm text-yellow-700">
+                ⚠️ Ao rejeitar este imóvel, ele não será publicado e o corretor será notificado sobre o motivo.
+              </p>
+            </div>
+
+            <div>
+              <Label>Motivo da Rejeição *</Label>
+              <Textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Explique o motivo da rejeição..."
+                rows={3}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Este motivo será visível para o corretor que cadastrou o imóvel.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setRejectDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={handleReject}
+                disabled={rejectMutation.isPending || !rejectionReason.trim()}
+              >
+                {rejectMutation.isPending ? "Rejeitando..." : "Confirmar Rejeição"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

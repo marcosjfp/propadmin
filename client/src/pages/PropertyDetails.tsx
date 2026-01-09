@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { systemToast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,6 @@ import {
   User,
   Calendar,
   Share2,
-  Heart,
   DollarSign
 } from "lucide-react";
 import {
@@ -74,7 +74,7 @@ export default function PropertyDetails() {
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert("Link copiado para a área de transferência!");
+      systemToast.info("Link copiado para a área de transferência!");
     }
   };
 
@@ -84,24 +84,30 @@ export default function PropertyDetails() {
     setSellDialogOpen(true);
   };
 
+  // Obter taxa de comissão (customizada ou padrão)
+  const getCommissionRate = (): number => {
+    if (property?.customCommissionRate !== null && property?.customCommissionRate !== undefined) {
+      return property.customCommissionRate;
+    }
+    return property?.transactionType === "venda" ? 800 : 1000;
+  };
+
   const handleConfirmTransaction = async () => {
     if (!property) return;
 
     const amount = Math.round(parseFloat(transactionAmount) * 100);
     if (isNaN(amount) || amount <= 0) {
-      alert("Por favor, informe um valor válido");
+      systemToast.warning("Por favor, informe um valor válido");
       return;
     }
 
-    const commissionRate = property.transactionType === "venda" ? 800 : 1000;
     const newStatus = property.transactionType === "venda" ? "vendida" : "alugada";
 
     try {
-      await createCommissionMutation.mutateAsync({
+      const result = await createCommissionMutation.mutateAsync({
         propertyId: property.id,
         transactionType: property.transactionType,
         transactionAmount: amount,
-        commissionRate,
       });
 
       await updatePropertyMutation.mutateAsync({
@@ -109,13 +115,19 @@ export default function PropertyDetails() {
         status: newStatus,
       });
 
-      const commissionValue = (amount * commissionRate) / 10000;
-      alert(`${property.transactionType === "venda" ? "Venda" : "Aluguel"} registrado!\n\nComissão: ${formatPrice(commissionValue)}`);
+      // Mostrar toast com valores atualizados do backend
+      systemToast.transaction({
+        propertyTitle: property.title,
+        transactionType: property.transactionType,
+        transactionAmount: result.transactionAmount,
+        commissionRate: result.commissionRate,
+        commissionAmount: result.commissionAmount,
+      });
       
       setSellDialogOpen(false);
       propertyQuery.refetch();
     } catch (error: any) {
-      alert("Erro: " + (error?.message || "Erro desconhecido"));
+      systemToast.error(error?.message || "Erro ao registrar transação");
     }
   };
 
@@ -179,7 +191,7 @@ export default function PropertyDetails() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-2 sm:gap-4">
               <Link href="/propriedades">
-                <Button variant="ghost" size="sm" className="h-8 px-2">
+                <Button variant="ghost" size="sm" className="h-8 px-2" aria-label="Voltar para lista de propriedades">
                   <ArrowLeft className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Voltar</span>
                 </Button>
@@ -187,13 +199,15 @@ export default function PropertyDetails() {
               <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">{property.title}</h1>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleShare} className="flex-1 sm:flex-none h-8">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleShare} 
+                className="flex-1 sm:flex-none h-8"
+                aria-label="Compartilhar imóvel"
+              >
                 <Share2 className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Compartilhar</span>
-              </Button>
-              <Button variant="outline" size="sm" className="flex-1 sm:flex-none h-8">
-                <Heart className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Favoritar</span>
               </Button>
             </div>
           </div>
@@ -239,9 +253,16 @@ export default function PropertyDetails() {
                       <span className="text-sm sm:text-lg font-normal">/mês</span>
                     )}
                   </p>
-                  <p className="text-xs sm:text-sm text-blue-600 mt-1">
-                    Comissão: {property.transactionType === "venda" ? "8%" : "10%"}
-                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-xs sm:text-sm text-blue-600">
+                      Comissão: {getCommissionRate() / 100}%
+                    </p>
+                    {property.customCommissionRate !== null && property.customCommissionRate !== undefined && (
+                      <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-xs">
+                        Customizada
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 {/* Features Grid */}
@@ -365,7 +386,7 @@ export default function PropertyDetails() {
             </Card>
 
             {/* Action Card for Agent */}
-            {(user?.role === "agent" || user?.role === "admin") && property.status === "ativa" && user?.id === property.agentId && (
+            {(user?.role === "agent" || user?.role === "admin") && property.status === "ativa" && (user?.id === property.agentId || user?.id === property.assignedAgentId) && (
               <Card className="border-green-200 bg-green-50">
                 <CardHeader>
                   <CardTitle className="text-lg text-green-800">Ações do Corretor</CardTitle>
@@ -379,8 +400,35 @@ export default function PropertyDetails() {
                     Registrar {property.transactionType === "venda" ? "Venda" : "Aluguel"}
                   </Button>
                   <p className="text-xs text-green-700 mt-2 text-center">
-                    Comissão: {property.transactionType === "venda" ? "8%" : "10%"}
+                    Comissão: {getCommissionRate() / 100}%
+                    {property.customCommissionRate !== null && property.customCommissionRate !== undefined && (
+                      <span className="ml-1 text-orange-600">(customizada)</span>
+                    )}
                   </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Assigned Agent Card - Show if property is assigned to a different agent */}
+            {property.assignedAgentId && property.assignedAgentId !== property.agentId && (
+              <Card className="border-blue-200 bg-blue-50">
+                <CardHeader>
+                  <CardTitle className="text-lg text-blue-800">Corretor Atribuído</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-200 rounded-full flex items-center justify-center">
+                      <User className="h-6 w-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-blue-800">
+                        {property.assignedAgentName || `Corretor #${property.assignedAgentId}`}
+                      </p>
+                      <Badge variant="secondary" className="text-xs mt-1">
+                        Responsável pela venda
+                      </Badge>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -397,15 +445,22 @@ export default function PropertyDetails() {
                     <p className="text-xl font-bold">{formatPrice(property.price)}</p>
                   </div>
                   <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-600">Taxa de Comissão</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm text-blue-600">Taxa de Comissão</p>
+                      {property.customCommissionRate !== null && property.customCommissionRate !== undefined && (
+                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-xs">
+                          Customizada
+                        </Badge>
+                      )}
+                    </div>
                     <p className="text-xl font-bold text-blue-700">
-                      {property.transactionType === "venda" ? "8%" : "10%"}
+                      {getCommissionRate() / 100}%
                     </p>
                   </div>
                   <div className="p-4 bg-green-50 rounded-lg">
                     <p className="text-sm text-green-600">Comissão Estimada</p>
                     <p className="text-2xl font-bold text-green-700">
-                      {formatPrice(property.price * (property.transactionType === "venda" ? 0.08 : 0.10))}
+                      {formatPrice(property.price * (getCommissionRate() / 10000))}
                     </p>
                   </div>
                 </div>
@@ -504,13 +559,24 @@ export default function PropertyDetails() {
             </div>
 
             <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-blue-600">Taxa de Comissão</p>
+                {property.customCommissionRate !== null && property.customCommissionRate !== undefined && (
+                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-xs">
+                    Customizada
+                  </Badge>
+                )}
+              </div>
+              <p className="text-lg font-bold text-blue-700 mb-2">
+                {getCommissionRate() / 100}%
+              </p>
               <p className="text-sm text-blue-600">Comissão Estimada</p>
               <p className="text-xl font-bold text-blue-700">
                 {transactionAmount && !isNaN(parseFloat(transactionAmount))
                   ? formatPrice(
                       Math.round(
                         parseFloat(transactionAmount) * 100 *
-                        (property.transactionType === "venda" ? 0.08 : 0.10)
+                        (getCommissionRate() / 10000)
                       )
                     )
                   : "R$ 0,00"}
