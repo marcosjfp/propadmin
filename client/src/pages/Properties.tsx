@@ -79,9 +79,17 @@ export default function Properties() {
     status: "ativa" as "ativa" | "vendida" | "alugada" | "inativa",
   });
 
-  const propertiesQuery = user?.role === "agent" 
-    ? trpc.properties.myProperties.useQuery() 
-    : trpc.properties.listAll.useQuery();
+  // Queries devem ser chamadas incondicionalmente - usar enabled para controlar execução
+  const myPropertiesQuery = trpc.properties.myProperties.useQuery(undefined, {
+    enabled: user?.role === "agent",
+  });
+  const allPropertiesQuery = trpc.properties.listAll.useQuery(undefined, {
+    enabled: user?.role === "admin",
+  });
+  
+  // Selecionar a query correta baseada no role
+  const propertiesQuery = user?.role === "agent" ? myPropertiesQuery : allPropertiesQuery;
+  
   const pendingQuery = trpc.properties.listPending.useQuery(undefined, {
     enabled: user?.role === "admin",
   });
