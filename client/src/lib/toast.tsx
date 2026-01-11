@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { CheckCircle2, XCircle, AlertCircle, Info, Clock, Ban } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Info, Ban } from "lucide-react";
 
 interface ToastOptions {
   title?: string;
@@ -194,41 +194,22 @@ export const systemToast = {
   },
 
   // Toast para criação de propriedade
-  propertyCreated: (title: string, needsApproval: boolean = false) => {
-    if (needsApproval) {
-      toast.info(
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-yellow-500 flex-shrink-0" />
-            <span className="font-semibold text-yellow-700">Imóvel Cadastrado!</span>
-          </div>
-          <p className="text-sm text-gray-600">
-            <span className="font-medium">"{title}"</span> foi cadastrado e está{" "}
-            <span className="font-medium text-yellow-600">aguardando aprovação</span> do administrador.
-          </p>
-        </div>,
-        {
-          duration: 5000,
-          className: "border-l-4 border-l-yellow-500",
-        }
-      );
-    } else {
-      toast.success(
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
-            <span className="font-semibold text-green-700">Imóvel Cadastrado!</span>
-          </div>
-          <p className="text-sm text-gray-600">
-            <span className="font-medium">"{title}"</span> foi cadastrado com sucesso.
-          </p>
-        </div>,
-        {
-          duration: 4000,
-          className: "border-l-4 border-l-green-500",
-        }
-      );
-    }
+  propertyCreated: (title: string) => {
+    toast.success(
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+          <span className="font-semibold text-green-700">Imóvel Cadastrado!</span>
+        </div>
+        <p className="text-sm text-gray-600">
+          <span className="font-medium">"{title}"</span> foi cadastrado com sucesso.
+        </p>
+      </div>,
+      {
+        duration: 4000,
+        className: "border-l-4 border-l-green-500",
+      }
+    );
   },
 
   // Toast para imóvel aprovado
