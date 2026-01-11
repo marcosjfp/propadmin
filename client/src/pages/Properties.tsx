@@ -1255,12 +1255,12 @@ export default function Properties() {
             
             <div>
               <Label>Corretor Responsável</Label>
-              <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+              <Select value={selectedAgentId || "none"} onValueChange={(value) => setSelectedAgentId(value === "none" ? "" : value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione um corretor" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum (remover atribuição)</SelectItem>
+                  <SelectItem value="none">Nenhum (remover atribuição)</SelectItem>
                   {agentsQuery.data
                     ?.filter((agent: any) => agent.role === "agent" || agent.role === "admin")
                     .map((agent: any) => (
