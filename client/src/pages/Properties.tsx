@@ -233,7 +233,7 @@ export default function Properties() {
         systemToast.propertyUpdated(formData.title);
       } else {
         const result = await createMutation.mutateAsync(propertyData);
-        systemToast.propertyCreated(formData.title, result.needsApproval);
+        systemToast.propertyCreated(formData.title);
         
         // Abrir automaticamente o dialog de imagens após criar o imóvel
         setImagePropertyId(result.id);

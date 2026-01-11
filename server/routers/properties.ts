@@ -42,12 +42,7 @@ export const propertiesRouter = router({
       })
       .from(propertiesSchema)
       .leftJoin(users, eq(propertiesSchema.agentId, users.id))
-      .where(
-        and(
-          eq(propertiesSchema.status, 'ativa'),
-          eq(propertiesSchema.isApproved, true)
-        )
-      )
+      .where(eq(propertiesSchema.status, 'ativa'))
       .orderBy(desc(propertiesSchema.createdAt));
     return result;
   }),
@@ -242,11 +237,6 @@ export const propertiesRouter = router({
       console.log("Creating property with input:", input);
       console.log("User:", ctx.user);
       
-      // Admin creates approved properties, agents create pending ones
-      const isAdmin = ctx.user.role === 'admin';
-      const propertyStatus = isAdmin ? 'ativa' : 'pendente';
-      const isApproved = isAdmin;
-      
       try {
         // MySQL não suporta RETURNING, então inserimos e pegamos o último ID
         await ctx.db
@@ -254,10 +244,8 @@ export const propertiesRouter = router({
           .values({
             ...input,
             agentId: ctx.user.id,
-            status: propertyStatus,
-            isApproved: isApproved,
-            approvedBy: isAdmin ? ctx.user.id : null,
-            approvedAt: isAdmin ? new Date() : null,
+            status: 'ativa',
+            isApproved: true,
           });
         
         // Buscar a propriedade recém-criada pelo agentId e título (mais recente)
@@ -277,17 +265,15 @@ export const propertiesRouter = router({
           entityType: 'property',
           entityId: property.id,
           entityName: property.title,
-          newValue: { ...input, id: property.id, status: propertyStatus, isApproved },
-          description: isAdmin 
-            ? `Imóvel "${property.title}" criado e aprovado automaticamente em ${property.city}/${property.state}`
-            : `Imóvel "${property.title}" criado e aguardando aprovação em ${property.city}/${property.state}`,
+          newValue: { ...input, id: property.id, status: 'ativa', isApproved: true },
+          description: `Imóvel "${property.title}" criado em ${property.city}/${property.state}`,
         });
         
         return { 
           id: property.id,
-          status: propertyStatus,
-          isApproved,
-          needsApproval: !isAdmin
+          status: 'ativa',
+          isApproved: true,
+          needsApproval: false
         };
       } catch (error) {
         console.error("Error creating property:", error);

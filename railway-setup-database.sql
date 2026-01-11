@@ -144,10 +144,18 @@ ALTER TABLE `commissions`
   ADD CONSTRAINT `commissions_agentId_users_id_fk` 
   FOREIGN KEY (`agentId`) REFERENCES `users`(`id`) ON DELETE CASCADE;
 
--- 7. CRIAR USUÁRIO ADMINISTRADOR INICIAL
+-- 7. CRIAR USUÁRIOS INICIAIS
 -- Substitua os valores conforme necessário
-INSERT INTO `users` (`openId`, `name`, `email`, `role`, `isAgent`) 
-VALUES ('github-admin-inicial', 'Administrador', 'admin@exemplo.com', 'admin', false)
+INSERT INTO `users` (`openId`, `name`, `email`, `role`, `isAgent`, `creci`) 
+VALUES ('admin-inicial', 'Administrador', 'admin@exemplo.com', 'admin', false, NULL)
+ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
+
+INSERT INTO `users` (`openId`, `name`, `email`, `role`, `isAgent`, `creci`) 
+VALUES ('agent-inicial', 'Corretor Demo', 'corretor@exemplo.com', 'agent', true, 'CRECI-12345')
+ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
+
+INSERT INTO `users` (`openId`, `name`, `email`, `role`, `isAgent`, `creci`) 
+VALUES ('user-inicial', 'Usuário Demo', 'usuario@exemplo.com', 'user', false, NULL)
 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`);
 
 -- ============================================
