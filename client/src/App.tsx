@@ -16,23 +16,58 @@ import AgentDashboard from "./pages/AgentDashboard";
 import PropertyDetails from "./pages/PropertyDetails";
 import AuditHistory from "./pages/AuditHistory";
 
+import { ProtectedRoute } from "./components/ProtectedRoute";
+
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
       <Route path={"/login"} component={Login} />
       <Route path={"/"} component={Home} />
-      <Route path="/propriedades" component={Properties} />
-      <Route path="/usuarios" component={Users} />
-      <Route path="/comissoes" component={Commissions} />
-      <Route path="/minhas-comissoes" component={MyCommissions} />
-      <Route path="/perfil" component={Profile} />
-      <Route path="/admin" component={AdminDashboard} />
-      <Route path="/meu-dashboard" component={AgentDashboard} />
-      <Route path="/imovel/:id" component={PropertyDetails} />
-      <Route path="/historico" component={AuditHistory} />
+      
+      {/* Public/Authenticated routes */}
+      <ProtectedRoute path="/perfil" component={Profile} />
+      <ProtectedRoute path="/imovel/:id" component={PropertyDetails} />
+      
+      {/* Agent & Admin routes */}
+      <ProtectedRoute 
+        path="/propriedades" 
+        component={Properties} 
+        allowedRoles={["agent", "admin"]} 
+      />
+      <ProtectedRoute 
+        path="/meu-dashboard" 
+        component={AgentDashboard} 
+        allowedRoles={["agent", "admin"]} 
+      />
+      <ProtectedRoute 
+        path="/minhas-comissoes" 
+        component={MyCommissions} 
+        allowedRoles={["agent", "admin"]} 
+      />
+      
+      {/* Admin only routes */}
+      <ProtectedRoute 
+        path="/usuarios" 
+        component={Users} 
+        allowedRoles={["admin"]} 
+      />
+      <ProtectedRoute 
+        path="/comissoes" 
+        component={Commissions} 
+        allowedRoles={["admin"]} 
+      />
+      <ProtectedRoute 
+        path="/admin" 
+        component={AdminDashboard} 
+        allowedRoles={["admin"]} 
+      />
+      <ProtectedRoute 
+        path="/historico" 
+        component={AuditHistory} 
+        allowedRoles={["admin"]} 
+      />
+      
       <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
   );

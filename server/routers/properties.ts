@@ -1,41 +1,46 @@
 import { z } from 'zod';
 import { router, publicProcedure, agentProcedure, adminProcedure } from '../trpc.js';
 import { users, properties as propertiesSchema } from '../../drizzle/schema.js';
-import { eq, and, desc, or } from 'drizzle-orm';
+import { eq, and, desc, or, sql } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
 import { alias } from 'drizzle-orm/mysql-core';
 
 // Alias para join com usuário atribuído
 const assignedAgent = alias(users, 'assignedAgent');
 
+// Campos padrão do imóvel compartilhados entre queries
+const propertySelectFields = {
+  id: propertiesSchema.id,
+  title: propertiesSchema.title,
+  description: propertiesSchema.description,
+  type: propertiesSchema.type,
+  transactionType: propertiesSchema.transactionType,
+  price: propertiesSchema.price,
+  size: propertiesSchema.size,
+  rooms: propertiesSchema.rooms,
+  bathrooms: propertiesSchema.bathrooms,
+  hasBackyard: propertiesSchema.hasBackyard,
+  hasLivingRoom: propertiesSchema.hasLivingRoom,
+  hasKitchen: propertiesSchema.hasKitchen,
+  address: propertiesSchema.address,
+  city: propertiesSchema.city,
+  state: propertiesSchema.state,
+  zipCode: propertiesSchema.zipCode,
+  agentId: propertiesSchema.agentId,
+  assignedAgentId: propertiesSchema.assignedAgentId,
+  customCommissionRate: propertiesSchema.customCommissionRate,
+  status: propertiesSchema.status,
+  isApproved: propertiesSchema.isApproved,
+  createdAt: propertiesSchema.createdAt,
+  updatedAt: propertiesSchema.updatedAt,
+};
+
 export const propertiesRouter = router({
   // List all active AND approved properties with agent info (public)
   list: publicProcedure.query(async ({ ctx }) => {
     const result = await ctx.db
       .select({
-        id: propertiesSchema.id,
-        title: propertiesSchema.title,
-        description: propertiesSchema.description,
-        type: propertiesSchema.type,
-        transactionType: propertiesSchema.transactionType,
-        price: propertiesSchema.price,
-        size: propertiesSchema.size,
-        rooms: propertiesSchema.rooms,
-        bathrooms: propertiesSchema.bathrooms,
-        hasBackyard: propertiesSchema.hasBackyard,
-        hasLivingRoom: propertiesSchema.hasLivingRoom,
-        hasKitchen: propertiesSchema.hasKitchen,
-        address: propertiesSchema.address,
-        city: propertiesSchema.city,
-        state: propertiesSchema.state,
-        zipCode: propertiesSchema.zipCode,
-        agentId: propertiesSchema.agentId,
-        assignedAgentId: propertiesSchema.assignedAgentId,
-        customCommissionRate: propertiesSchema.customCommissionRate,
-        status: propertiesSchema.status,
-        isApproved: propertiesSchema.isApproved,
-        createdAt: propertiesSchema.createdAt,
-        updatedAt: propertiesSchema.updatedAt,
+        ...propertySelectFields,
         agentName: users.name,
         agentEmail: users.email,
         agentCreci: users.creci,
@@ -47,74 +52,100 @@ export const propertiesRouter = router({
     return result;
   }),
 
-  // List all properties (admin only) - includes pending approval
-  listAll: adminProcedure.query(async ({ ctx }) => {
-    const result = await ctx.db
-      .select({
-        id: propertiesSchema.id,
-        title: propertiesSchema.title,
-        description: propertiesSchema.description,
-        type: propertiesSchema.type,
-        transactionType: propertiesSchema.transactionType,
-        price: propertiesSchema.price,
-        size: propertiesSchema.size,
-        rooms: propertiesSchema.rooms,
-        bathrooms: propertiesSchema.bathrooms,
-        hasBackyard: propertiesSchema.hasBackyard,
-        hasLivingRoom: propertiesSchema.hasLivingRoom,
-        hasKitchen: propertiesSchema.hasKitchen,
-        address: propertiesSchema.address,
-        city: propertiesSchema.city,
-        state: propertiesSchema.state,
-        zipCode: propertiesSchema.zipCode,
-        agentId: propertiesSchema.agentId,
-        assignedAgentId: propertiesSchema.assignedAgentId,
-        customCommissionRate: propertiesSchema.customCommissionRate,
-        status: propertiesSchema.status,
-        isApproved: propertiesSchema.isApproved,
-        approvedBy: propertiesSchema.approvedBy,
-        approvedAt: propertiesSchema.approvedAt,
-        rejectionReason: propertiesSchema.rejectionReason,
-        createdAt: propertiesSchema.createdAt,
-        updatedAt: propertiesSchema.updatedAt,
-        agentName: users.name,
-        agentEmail: users.email,
-        agentCreci: users.creci,
-        assignedAgentName: assignedAgent.name,
-        assignedAgentEmail: assignedAgent.email,
-      })
-      .from(propertiesSchema)
-      .leftJoin(users, eq(propertiesSchema.agentId, users.id))
-      .leftJoin(assignedAgent, eq(propertiesSchema.assignedAgentId, assignedAgent.id))
-      .orderBy(desc(propertiesSchema.createdAt));
-    return result;
-  }),
+  // List all properties with pagination (admin only) - includes pending approval
+  listAll: adminProcedure
+    .input(z.object({ 
+      page: z.number().min(1).default(1), 
+      pageSize: z.number().min(1).max(100).default(20),
+      search: z.string().optional(),
+      status: z.string().optional(),
+      type: z.string().optional(),
+      transactionType: z.string().optional(),
+      city: z.string().optional(),
+      minPrice: z.number().optional(),
+      maxPrice: z.number().optional(),
+      minRooms: z.number().optional(),
+    }).optional().default({ page: 1, pageSize: 20 }))
+    .query(async ({ ctx, input }) => {
+      const { 
+        page, pageSize, search, status, type, transactionType, 
+        city, minPrice, maxPrice, minRooms 
+      } = input;
+      const offset = (page - 1) * pageSize;
+
+      const whereConditions = [];
+      if (search) {
+        whereConditions.push(
+          or(
+            sql`${propertiesSchema.title} LIKE ${`%${search}%`}`,
+            sql`${propertiesSchema.address} LIKE ${`%${search}%`}`,
+            sql`${propertiesSchema.description} LIKE ${`%${search}%`}`
+          )
+        );
+      }
+      if (status && status !== 'todos' && status !== 'all') {
+        whereConditions.push(eq(propertiesSchema.status, status as any));
+      }
+      if (type && type !== 'todos' && type !== 'all') {
+        whereConditions.push(eq(propertiesSchema.type, type as any));
+      }
+      if (transactionType && transactionType !== 'todos' && transactionType !== 'all') {
+        whereConditions.push(eq(propertiesSchema.transactionType, transactionType as any));
+      }
+      if (city && city !== 'todos' && city !== 'all') {
+        whereConditions.push(eq(propertiesSchema.city, city));
+      }
+      if (minPrice !== undefined) {
+        whereConditions.push(sql`${propertiesSchema.price} >= ${minPrice * 100}`);
+      }
+      if (maxPrice !== undefined) {
+        whereConditions.push(sql`${propertiesSchema.price} <= ${maxPrice * 100}`);
+      }
+      if (minRooms !== undefined) {
+        whereConditions.push(sql`${propertiesSchema.rooms} >= ${minRooms}`);
+      }
+
+      const finalWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+      const items = await ctx.db
+        .select({
+          ...propertySelectFields,
+          approvedBy: propertiesSchema.approvedBy,
+          approvedAt: propertiesSchema.approvedAt,
+          rejectionReason: propertiesSchema.rejectionReason,
+          agentName: users.name,
+          agentEmail: users.email,
+          agentCreci: users.creci,
+          assignedAgentName: assignedAgent.name,
+          assignedAgentEmail: assignedAgent.email,
+        })
+        .from(propertiesSchema)
+        .leftJoin(users, eq(propertiesSchema.agentId, users.id))
+        .leftJoin(assignedAgent, eq(propertiesSchema.assignedAgentId, assignedAgent.id))
+        .where(finalWhere)
+        .orderBy(desc(propertiesSchema.createdAt))
+        .limit(pageSize)
+        .offset(offset);
+
+      const [countResult] = await ctx.db
+        .select({ count: sql`count(*)` })
+        .from(propertiesSchema)
+        .where(finalWhere);
+
+      return {
+        items,
+        totalCount: Number(countResult.count),
+        page,
+        pageSize,
+        totalPages: Math.ceil(Number(countResult.count) / pageSize)
+      };
+    }),
 
   // List pending approval properties (admin only)
   listPending: adminProcedure.query(async ({ ctx }) => {
     const result = await ctx.db
       .select({
-        id: propertiesSchema.id,
-        title: propertiesSchema.title,
-        description: propertiesSchema.description,
-        type: propertiesSchema.type,
-        transactionType: propertiesSchema.transactionType,
-        price: propertiesSchema.price,
-        size: propertiesSchema.size,
-        rooms: propertiesSchema.rooms,
-        bathrooms: propertiesSchema.bathrooms,
-        hasBackyard: propertiesSchema.hasBackyard,
-        hasLivingRoom: propertiesSchema.hasLivingRoom,
-        hasKitchen: propertiesSchema.hasKitchen,
-        address: propertiesSchema.address,
-        city: propertiesSchema.city,
-        state: propertiesSchema.state,
-        zipCode: propertiesSchema.zipCode,
-        agentId: propertiesSchema.agentId,
-        status: propertiesSchema.status,
-        isApproved: propertiesSchema.isApproved,
-        createdAt: propertiesSchema.createdAt,
-        updatedAt: propertiesSchema.updatedAt,
+        ...propertySelectFields,
         agentName: users.name,
         agentEmail: users.email,
         agentCreci: users.creci,
@@ -135,30 +166,8 @@ export const propertiesRouter = router({
   myProperties: agentProcedure.query(async ({ ctx }) => {
     const result = await ctx.db
       .select({
-        id: propertiesSchema.id,
-        title: propertiesSchema.title,
-        description: propertiesSchema.description,
-        type: propertiesSchema.type,
-        transactionType: propertiesSchema.transactionType,
-        price: propertiesSchema.price,
-        size: propertiesSchema.size,
-        rooms: propertiesSchema.rooms,
-        bathrooms: propertiesSchema.bathrooms,
-        hasBackyard: propertiesSchema.hasBackyard,
-        hasLivingRoom: propertiesSchema.hasLivingRoom,
-        hasKitchen: propertiesSchema.hasKitchen,
-        address: propertiesSchema.address,
-        city: propertiesSchema.city,
-        state: propertiesSchema.state,
-        zipCode: propertiesSchema.zipCode,
-        agentId: propertiesSchema.agentId,
-        assignedAgentId: propertiesSchema.assignedAgentId,
-        customCommissionRate: propertiesSchema.customCommissionRate,
-        status: propertiesSchema.status,
-        isApproved: propertiesSchema.isApproved,
+        ...propertySelectFields,
         rejectionReason: propertiesSchema.rejectionReason,
-        createdAt: propertiesSchema.createdAt,
-        updatedAt: propertiesSchema.updatedAt,
       })
       .from(propertiesSchema)
       .where(
@@ -177,28 +186,7 @@ export const propertiesRouter = router({
     .query(async ({ ctx, input }) => {
       const [property] = await ctx.db
         .select({
-          id: propertiesSchema.id,
-          title: propertiesSchema.title,
-          description: propertiesSchema.description,
-          type: propertiesSchema.type,
-          transactionType: propertiesSchema.transactionType,
-          price: propertiesSchema.price,
-          size: propertiesSchema.size,
-          rooms: propertiesSchema.rooms,
-          bathrooms: propertiesSchema.bathrooms,
-          hasBackyard: propertiesSchema.hasBackyard,
-          hasLivingRoom: propertiesSchema.hasLivingRoom,
-          hasKitchen: propertiesSchema.hasKitchen,
-          address: propertiesSchema.address,
-          city: propertiesSchema.city,
-          state: propertiesSchema.state,
-          zipCode: propertiesSchema.zipCode,
-          agentId: propertiesSchema.agentId,
-          assignedAgentId: propertiesSchema.assignedAgentId,
-          customCommissionRate: propertiesSchema.customCommissionRate,
-          status: propertiesSchema.status,
-          createdAt: propertiesSchema.createdAt,
-          updatedAt: propertiesSchema.updatedAt,
+          ...propertySelectFields,
           agentName: users.name,
           agentEmail: users.email,
           agentCreci: users.creci,
@@ -234,29 +222,24 @@ export const propertiesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      console.log("Creating property with input:", input);
-      console.log("User:", ctx.user);
+      const isAdmin = ctx.user.role === 'admin';
       
       try {
-        // MySQL não suporta RETURNING, então inserimos e pegamos o último ID
         await ctx.db
           .insert(propertiesSchema)
           .values({
             ...input,
             agentId: ctx.user.id,
-            status: 'ativa',
-            isApproved: true,
+            status: isAdmin ? 'ativa' : 'pendente',
+            isApproved: isAdmin,
           });
         
-        // Buscar a propriedade recém-criada pelo agentId e título (mais recente)
         const [property] = await ctx.db
           .select()
           .from(propertiesSchema)
           .where(eq(propertiesSchema.agentId, ctx.user.id))
           .orderBy(desc(propertiesSchema.id))
           .limit(1);
-        
-        console.log("Property created:", property);
         
         // Registrar no histórico
         await createAuditLog({
@@ -265,15 +248,14 @@ export const propertiesRouter = router({
           entityType: 'property',
           entityId: property.id,
           entityName: property.title,
-          newValue: { ...input, id: property.id, status: 'ativa', isApproved: true },
-          description: `Imóvel "${property.title}" criado em ${property.city}/${property.state}`,
+          description: `Imóvel "${input.title}" criado por ${ctx.user.name || ctx.user.email}`,
         });
         
         return { 
           id: property.id,
-          status: 'ativa',
-          isApproved: true,
-          needsApproval: false
+          status: property.status,
+          isApproved: property.isApproved,
+          needsApproval: !isAdmin
         };
       } catch (error) {
         console.error("Error creating property:", error);
@@ -301,7 +283,7 @@ export const propertiesRouter = router({
         city: z.string().min(1).optional(),
         state: z.string().length(2).optional(),
         zipCode: z.string().optional(),
-        status: z.enum(['ativa', 'vendida', 'alugada', 'inativa']).optional(),
+        status: z.enum(['pendente', 'ativa', 'vendida', 'alugada', 'inativa', 'rejeitada']).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -338,7 +320,7 @@ export const propertiesRouter = router({
           'vendida': 'property_sold',
           'alugada': 'property_rented',
         };
-        const action = actionMap[updateData.status!] || 'property_status_changed';
+        const action = (actionMap[updateData.status!] || 'property_status_changed') as any;
         
         await createAuditLog({
           ctx,
@@ -657,4 +639,14 @@ export const propertiesRouter = router({
         message: `Imóvel "${property.title}" rejeitado`
       };
     }),
+
+  // List all unique cities where properties are located
+  listCities: publicProcedure.query(async ({ ctx }) => {
+    const result = await ctx.db
+      .selectDistinct({ city: propertiesSchema.city })
+      .from(propertiesSchema)
+      .where(eq(propertiesSchema.status, 'ativa'))
+      .orderBy(propertiesSchema.city);
+    return result.map(r => r.city).filter(Boolean);
+  }),
 });

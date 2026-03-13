@@ -361,13 +361,6 @@ export default function PropertyDetails() {
                         <span className="text-sm">{agent.email}</span>
                       </div>
                     )}
-                    
-                    {agent.phone && (
-                      <div className="flex items-center gap-3 text-gray-600">
-                        <Phone className="h-4 w-4" />
-                        <span className="text-sm">{agent.phone}</span>
-                      </div>
-                    )}
 
                     {property.status === "ativa" && (
                       <Button 
@@ -496,34 +489,6 @@ export default function PropertyDetails() {
                     <div>
                       <p className="font-medium">Email</p>
                       <p className="text-sm text-gray-500">{agent.email}</p>
-                    </div>
-                  </a>
-                )}
-                
-                {agent.phone && (
-                  <a 
-                    href={`tel:${agent.phone}`}
-                    className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <Phone className="h-5 w-5 text-green-600" />
-                    <div>
-                      <p className="font-medium">Telefone</p>
-                      <p className="text-sm text-gray-500">{agent.phone}</p>
-                    </div>
-                  </a>
-                )}
-
-                {agent.phone && (
-                  <a 
-                    href={`https://wa.me/55${agent.phone.replace(/\D/g, '')}?text=Olá! Tenho interesse no imóvel: ${property.title}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-4 border border-green-200 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
-                  >
-                    <span className="text-2xl">📱</span>
-                    <div>
-                      <p className="font-medium text-green-800">WhatsApp</p>
-                      <p className="text-sm text-green-600">Enviar mensagem</p>
                     </div>
                   </a>
                 )}

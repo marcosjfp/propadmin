@@ -25,7 +25,6 @@ function getDatabaseUrl(): string {
 }
 
 const DATABASE_URL = getDatabaseUrl();
-console.log('🔗 Database URL pattern:', DATABASE_URL.replace(/:[^:@]+@/, ':****@'));
 
 // Lazy pool creation to prevent crash on startup
 let pool: mysql.Pool | null = null;
@@ -78,7 +77,7 @@ export async function testConnection(): Promise<boolean> {
     console.log('✅ Database connection successful');
     return true;
   } catch (error) {
-    console.error('❌ Database connection failed:', error instanceof Error ? error.message : error);
+    console.error('❌ Database connection failed:', error);
     return false;
   }
 }
