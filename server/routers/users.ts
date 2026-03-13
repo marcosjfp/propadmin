@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure, adminProcedure } from '../trpc.js';
 import { users } from '../../drizzle/schema.js';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql, or } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
 
 export const usersRouter = router({
@@ -22,12 +22,12 @@ export const usersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // Apenas atualizar campos permitidos do próprio perfil
-      const updateData: any = {};
+      const updateData: Partial<typeof users.$inferInsert> = {};
       if (input.name !== undefined) updateData.name = input.name;
       if (input.email !== undefined) updateData.email = input.email;
       if (input.phone !== undefined) updateData.phone = input.phone;
       // Apenas agentes podem atualizar o CRECI
-      if (input.creci !== undefined && ctx.user.isAgent) {
+      if (input.creci !== undefined && (ctx.user.role === 'agent' || ctx.user.role === 'admin')) {
         updateData.creci = input.creci;
       }
       
@@ -41,14 +41,36 @@ export const usersRouter = router({
       return { success: true };
     }),
 
-  // List all users (admin only)
-  list: adminProcedure.query(async ({ ctx }) => {
-    const result = await ctx.db
-      .select()
-      .from(users)
-      .orderBy(desc(users.createdAt));
-    return result;
-  }),
+  // List all users with pagination (admin only)
+  list: adminProcedure
+    .input(z.object({ 
+      page: z.number().min(1).default(1), 
+      pageSize: z.number().min(1).max(100).default(20) 
+    }).optional().default({ page: 1, pageSize: 20 }))
+    .query(async ({ ctx, input }) => {
+      const { page, pageSize } = input;
+      const offset = (page - 1) * pageSize;
+
+      const items = await ctx.db
+        .select()
+        .from(users)
+        .orderBy(desc(users.createdAt))
+        .limit(pageSize)
+        .offset(offset);
+        
+      // Conta o total (MySQL requer query separada)
+      const [countResult] = await ctx.db
+        .select({ count: sql`count(*)` })
+        .from(users);
+        
+      return {
+        items,
+        totalCount: Number(countResult.count),
+        page,
+        pageSize,
+        totalPages: Math.ceil(Number(countResult.count) / pageSize)
+      };
+    }),
 
   // Get a single user by ID (admin only)
   getById: adminProcedure
@@ -72,7 +94,6 @@ export const usersRouter = router({
         phone: z.string().regex(/^[\d\s\-()]+$/).optional(),
         loginMethod: z.string().optional(),
         role: z.enum(['user', 'agent', 'admin']).default('user'),
-        isAgent: z.boolean().default(false),
         creci: z.string().optional(),
       })
     )
@@ -119,7 +140,7 @@ export const usersRouter = router({
         entityType: 'user',
         entityId: user.id,
         entityName: user.name || user.email || 'Usuário',
-        newValue: { role: input.role, isAgent: input.isAgent },
+        newValue: { role: input.role },
         description: `Usuário "${user.name || user.email}" criado pelo administrador`,
       });
       
@@ -132,7 +153,6 @@ export const usersRouter = router({
       z.object({
         id: z.number(),
         role: z.enum(['user', 'agent', 'admin']),
-        isAgent: z.boolean().optional(),
         creci: z.string().optional(),
       })
     )
@@ -159,7 +179,7 @@ export const usersRouter = router({
           entityType: 'user',
           entityId: id,
           entityName: currentUser.name || currentUser.email || `User #${id}`,
-          previousValue: { role: currentUser.role, isAgent: currentUser.isAgent },
+          previousValue: { role: currentUser.role },
           newValue: updateData,
           description: `Papel do usuário "${currentUser.name || currentUser.email}" alterado de "${currentUser.role}" para "${updateData.role}"`,
         });
@@ -215,7 +235,6 @@ export const usersRouter = router({
         email: z.string().email().optional(),
         phone: z.string().optional(),
         role: z.enum(['user', 'agent', 'admin']).optional(),
-        isAgent: z.boolean().optional(),
         creci: z.string().optional(),
       })
     )
@@ -229,11 +248,8 @@ export const usersRouter = router({
         .where(eq(users.id, id))
         .limit(1);
       
-      // Se mudar para agent, atualizar isAgent também
-      if (updateData.role === 'agent') {
-        updateData.isAgent = true;
-      } else if (updateData.role === 'user') {
-        updateData.isAgent = false;
+      // Se mudar para user, limpar CRECI
+      if (updateData.role === 'user') {
         updateData.creci = undefined;
       }
       
@@ -292,7 +308,6 @@ export const usersRouter = router({
         .update(users)
         .set({
           role: 'agent',
-          isAgent: true,
           creci: normalizedCreci,
         })
         .where(eq(users.id, input.id));
@@ -305,8 +320,8 @@ export const usersRouter = router({
           entityType: 'user',
           entityId: input.id,
           entityName: currentUser.name || currentUser.email || `User #${input.id}`,
-          previousValue: { role: currentUser.role, isAgent: currentUser.isAgent },
-          newValue: { role: 'agent', isAgent: true, creci: normalizedCreci },
+          previousValue: { role: currentUser.role },
+          newValue: { role: 'agent', creci: normalizedCreci },
           description: `Usuário "${currentUser.name || currentUser.email}" promovido a corretor com CRECI ${normalizedCreci}`,
         });
       }
@@ -317,9 +332,15 @@ export const usersRouter = router({
   // List all agents
   listAgents: publicProcedure.query(async ({ ctx }) => {
     const result = await ctx.db
-      .select()
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        creci: users.creci,
+        createdAt: users.createdAt,
+      })
       .from(users)
-      .where(eq(users.isAgent, true))
+      .where(or(eq(users.role, 'agent'), eq(users.role, 'admin')))
       .orderBy(desc(users.createdAt));
     return result;
   }),
@@ -357,7 +378,6 @@ export const usersRouter = router({
           email: input.email,
           phone: input.phone,
           role: 'agent',
-          isAgent: true,
           creci: input.creci,
           loginMethod: 'admin-created',
         });

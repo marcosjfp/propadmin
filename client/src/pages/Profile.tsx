@@ -122,7 +122,7 @@ export default function Profile() {
                   />
                 </div>
 
-                {user?.isAgent && (
+                {(user?.role === 'agent' || user?.role === 'admin') && (
                   <div>
                     <Label>CRECI</Label>
                     <Input
@@ -176,7 +176,7 @@ export default function Profile() {
                   <p className="text-lg font-semibold">{getRoleLabel(user?.role || "user")}</p>
                 </div>
 
-                {user?.isAgent && (
+                {(user?.role === 'agent' || user?.role === 'admin') && (
                   <div>
                     <p className="text-sm text-gray-600">CRECI</p>
                     <p className="text-lg font-semibold">{user?.creci || "-"}</p>

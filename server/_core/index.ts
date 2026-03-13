@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
 import * as trpcExpress from '@trpc/server/adapters/express';
 import { appRouter } from '../routers/index.js';
 import { createContext, createJWT } from '../context.js';
@@ -20,7 +21,7 @@ console.log('🚀 Starting server initialization...');
 console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
 console.log(`🔌 PORT: ${process.env.PORT || 3000}`);
 
-// Detect static files path early
+// Detect static files path
 const possibleStaticPaths = [
   path.join(process.cwd(), 'client', 'dist'),
   '/app/client/dist',
@@ -28,33 +29,16 @@ const possibleStaticPaths = [
 ];
 
 let staticFilesPath: string | null = null;
-console.log('🔍 Looking for static files...');
-console.log(`   CWD: ${process.cwd()}`);
-console.log(`   __dirname: ${__dirname}`);
-
 for (const p of possibleStaticPaths) {
-  const indexFile = path.join(p, 'index.html');
-  const exists = fs.existsSync(indexFile);
-  console.log(`   Checking: ${indexFile} - ${exists ? '✅ FOUND' : '❌ not found'}`);
-  if (exists && !staticFilesPath) {
+  if (fs.existsSync(path.join(p, 'index.html')) && !staticFilesPath) {
     staticFilesPath = p;
   }
 }
 
 if (staticFilesPath) {
-  console.log(`📂 Will serve static files from: ${staticFilesPath}`);
+  console.log(`📂 Serving static files from: ${staticFilesPath}`);
 } else {
-  console.log('⚠️  No static files found!');
-  // List directory contents for debugging
-  try {
-    console.log(`   Contents of ${process.cwd()}:`, fs.readdirSync(process.cwd()));
-    const clientPath = path.join(process.cwd(), 'client');
-    if (fs.existsSync(clientPath)) {
-      console.log(`   Contents of ${clientPath}:`, fs.readdirSync(clientPath));
-    }
-  } catch (e) {
-    console.log('   Could not list directories');
-  }
+  console.log('⚠️  No static files found — running API-only mode.');
 }
 
 const app = express();
@@ -70,42 +54,47 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Debug endpoint to check environment variables (remove in production later)
-app.get('/api/debug-env', (req, res) => {
-  res.json({
-    NODE_ENV: process.env.NODE_ENV,
-    DB_HOST: process.env.DB_HOST ? '✅ SET' : '❌ NOT SET',
-    DB_PORT: process.env.DB_PORT ? '✅ SET' : '❌ NOT SET',
-    DB_USER: process.env.DB_USER ? '✅ SET' : '❌ NOT SET',
-    DB_PASSWORD: process.env.DB_PASSWORD ? '✅ SET (hidden)' : '❌ NOT SET',
-    DB_NAME: process.env.DB_NAME ? '✅ SET' : '❌ NOT SET',
-    MYSQL_HOST: process.env.MYSQL_HOST ? '✅ SET' : '❌ NOT SET',
-    MYSQLHOST: process.env.MYSQLHOST ? '✅ SET' : '❌ NOT SET',
-    DATABASE_URL: process.env.DATABASE_URL ? '✅ SET' : '❌ NOT SET',
-    // Show actual DB_HOST value (first 5 chars only for security)
-    DB_HOST_preview: process.env.DB_HOST ? process.env.DB_HOST.substring(0, 10) + '...' : 'not set',
-  });
+// Middleware
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+  skip: (req) => req.path === '/api/health', // skip health checks
 });
 
-// Middleware
+const trpcLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
 app.use(cors({
   origin: process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? true : 'http://localhost:5173'),
   credentials: true,
 }));
+app.use(generalLimiter);
 app.use(express.json());
 app.use(cookieParser());
 
 // tRPC endpoint
 app.use(
   '/trpc',
+  trpcLimiter,
   trpcExpress.createExpressMiddleware({
     router: appRouter,
     createContext,
   })
 );
 
-// Development login endpoint - Creates a mock authenticated session
+// Development login endpoint - Creates a mock authenticated session (dev only)
 app.get('/api/dev-login', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Not available in production' });
+  }
   try {
     // Check query param for role (default: agent)
     const role = req.query.role as string || 'agent';
@@ -152,8 +141,11 @@ app.get('/api/dev-login', async (req, res) => {
   }
 });
 
-// Dev login page with role selection
+// Dev login page with role selection (dev only)
 app.get('/api/dev-login-page', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Not available in production' });
+  }
   // Se passou role na query, redireciona direto para o login
   const role = req.query.role as string;
   if (role && ['admin', 'agent', 'user'].includes(role)) {

@@ -49,9 +49,13 @@ export default function AdminDashboard() {
     creci: "",
   });
 
+  const [userPage, setUserPage] = useState(1);
+  const userPageSize = 20;
+
   // Queries
-  const usersQuery = trpc.users.list.useQuery();
-  const propertiesQuery = trpc.properties.listAll.useQuery();
+  const usersQuery = trpc.users.list.useQuery({ page: userPage, pageSize: userPageSize });
+  // Pass high limit for properties temporarily until properties dashboard pagination is built
+  const propertiesQuery = trpc.properties.listAll.useQuery({ page: 1, pageSize: 50 });
   const commissionsQuery = trpc.commissions.list.useQuery();
 
   // Mutations
@@ -87,10 +91,11 @@ export default function AdminDashboard() {
   };
 
   // Statistics
-  const totalUsers = usersQuery.data?.length || 0;
-  const totalAgents = usersQuery.data?.filter(u => u.role === "agent").length || 0;
-  const totalProperties = propertiesQuery.data?.length || 0;
-  const activeProperties = propertiesQuery.data?.filter(p => p.status === "ativa").length || 0;
+  const totalUsers = usersQuery.data?.totalCount || 0;
+  // Fallbacks if mapping over items or if items undefined
+  const totalAgents = usersQuery.data?.items?.filter(u => u.role === "agent").length || 0;
+  const totalProperties = propertiesQuery.data?.totalCount || 0;
+  const activeProperties = propertiesQuery.data?.items?.filter(p => p.status === "ativa").length || 0;
   const totalCommissions = commissionsQuery.data?.reduce((sum, c) => sum + c.commissionAmount, 0) || 0;
   const pendingCommissions = commissionsQuery.data?.filter(c => c.status === "pendente").reduce((sum, c) => sum + c.commissionAmount, 0) || 0;
   const paidCommissions = commissionsQuery.data?.filter(c => c.status === "paga").reduce((sum, c) => sum + c.commissionAmount, 0) || 0;
@@ -402,7 +407,7 @@ export default function AdminDashboard() {
               <CardContent>
                 {usersQuery.isLoading ? (
                   <p className="text-center py-4 text-gray-500">Carregando...</p>
-                ) : usersQuery.data && usersQuery.data.length > 0 ? (
+                ) : usersQuery.data?.items && usersQuery.data.items.length > 0 ? (
                   <div className="space-y-4">
                     {/* Desktop Table */}
                     <div className="hidden md:block overflow-x-auto">
@@ -418,7 +423,7 @@ export default function AdminDashboard() {
                           </tr>
                         </thead>
                         <tbody>
-                          {usersQuery.data.map((u) => (
+                          {usersQuery.data.items.map((u) => (
                             <tr key={u.id} className="border-b hover:bg-gray-50">
                               <td className="py-3 px-2">{u.name || "-"}</td>
                               <td className="py-3 px-2">{u.email || "-"}</td>
@@ -460,7 +465,7 @@ export default function AdminDashboard() {
                     
                     {/* Mobile Cards */}
                     <div className="md:hidden space-y-3">
-                      {usersQuery.data.map((u) => (
+                      {usersQuery.data.items.map((u) => (
                         <div key={u.id} className="border rounded-lg p-4 bg-white">
                           <div className="flex justify-between items-start mb-3">
                             <div>
@@ -509,6 +514,32 @@ export default function AdminDashboard() {
                         </div>
                       ))}
                     </div>
+                    {/* Pagination Controls */}
+                    {usersQuery.data?.totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-6">
+                        <p className="text-sm text-gray-500">
+                          Pág. {userPage} de {usersQuery.data.totalPages}
+                        </p>
+                        <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                              disabled={userPage === 1}
+                            >
+                              Anterior
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setUserPage(p => Math.min(usersQuery.data.totalPages, p + 1))}
+                              disabled={userPage === usersQuery.data.totalPages}
+                            >
+                              Próxima
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                   </div>
                 ) : (
                   <p className="text-center py-4 text-gray-500">Nenhum usuário encontrado</p>
@@ -603,12 +634,12 @@ export default function AdminDashboard() {
                   <p className="text-center py-4 text-gray-500">Carregando...</p>
                 ) : (
                   <div className="space-y-4">
-                    {usersQuery.data?.filter(u => u.role === "agent").map((agent) => {
+                    {usersQuery.data?.items?.filter(u => u.role === "agent").map((agent) => {
                       const agentCommissions = commissionsQuery.data?.filter(c => c.agentId === agent.id) || [];
                       const totalAgent = agentCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);
                       const paidAgent = agentCommissions.filter(c => c.status === "paga").reduce((sum, c) => sum + c.commissionAmount, 0);
                       const pendingAgent = agentCommissions.filter(c => c.status === "pendente").reduce((sum, c) => sum + c.commissionAmount, 0);
-                      const agentProperties = propertiesQuery.data?.filter(p => p.agentId === agent.id) || [];
+                      const agentProperties = propertiesQuery.data?.items?.filter(p => p.agentId === agent.id) || [];
 
                       return (
                         <div key={agent.id} className="border rounded-lg p-4">
@@ -641,7 +672,7 @@ export default function AdminDashboard() {
                         </div>
                       );
                     })}
-                    {usersQuery.data?.filter(u => u.role === "agent").length === 0 && (
+                    {(!usersQuery.data?.items || usersQuery.data.items.filter(u => u.role === "agent").length === 0) && (
                       <p className="text-center py-4 text-gray-500">Nenhum corretor cadastrado</p>
                     )}
                   </div>
@@ -713,7 +744,7 @@ export default function AdminDashboard() {
                     Ranking de Corretores no Período
                   </h3>
                   <div className="space-y-3">
-                    {usersQuery.data?.filter(u => u.role === "agent")
+                    {usersQuery.data?.items?.filter(u => u.role === "agent")
                       .map(agent => {
                         const agentPeriodCommissions = filteredCommissions.filter(c => c.agentId === agent.id);
                         const total = agentPeriodCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);

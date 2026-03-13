@@ -31,7 +31,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Link } from "wouter";
-import { ArrowLeft, Trash2, UserCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  UserCheck,
+  Trash2,
+  ShieldCheck,
+  User as UserIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { ErrorState, LoadingState } from "@/components/StateComponents";
 
@@ -43,7 +49,10 @@ export default function Users() {
   const [userToDelete, setUserToDelete] = useState<{ id: number; name: string } | null>(null);
   const [creci, setCreci] = useState("");
 
-  const usersQuery = trpc.users.list.useQuery();
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+
+  const usersQuery = trpc.users.list.useQuery({ page, pageSize });
   const updateMutation = trpc.users.update.useMutation();
   const deleteMutation = trpc.users.delete.useMutation();
   const promoteMutation = trpc.users.promoteToAgent.useMutation();
@@ -139,9 +148,9 @@ export default function Users() {
             message="Erro ao carregar usuários" 
             onRetry={() => usersQuery.refetch()} 
           />
-        ) : usersQuery.data && usersQuery.data.length > 0 ? (
+        ) : usersQuery.data?.items && usersQuery.data.items.length > 0 ? (
           <div className="space-y-4">
-            {usersQuery.data.map((u) => (
+            {usersQuery.data.items.map((u) => (
               <Card key={u.id}>
                 <CardHeader className="pb-3 sm:pb-4">
                   <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
@@ -150,7 +159,7 @@ export default function Users() {
                       <CardDescription className="text-sm">{u.email || "Sem email"}</CardDescription>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {!u.isAgent && u.role === "user" && (
+                      {u.role === "user" && (
                         <Dialog open={promoteDialogOpen && selectedUser?.id === u.id} onOpenChange={(open) => {
                           setPromoteDialogOpen(open);
                           if (open) setSelectedUser(u);
@@ -217,6 +226,17 @@ export default function Users() {
                         </SelectContent>
                       </Select>
                     </div>
+                      {u.role === 'agent' || u.role === 'admin' ? (
+                        <div className="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">Corretor</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full">
+                          <UserIcon className="h-3.5 w-3.5" />
+                          <span className="text-xs font-medium">Cliente</span>
+                        </div>
+                      )}
                     <div>
                       <p className="text-xs sm:text-sm text-gray-600">Telefone</p>
                       <p className="font-semibold text-sm sm:text-base">{u.phone || "-"}</p>
@@ -225,14 +245,37 @@ export default function Users() {
                       <p className="text-xs sm:text-sm text-gray-600">CRECI</p>
                       <p className="font-semibold text-sm sm:text-base">{u.creci || "-"}</p>
                     </div>
-                    <div>
-                      <p className="text-xs sm:text-sm text-gray-600">Status</p>
-                      <p className="font-semibold text-sm sm:text-base">{u.isAgent ? "Agente Ativo" : "Não é Agente"}</p>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
+            
+            {/* Pagination Controls */}
+            {usersQuery.data?.totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6">
+                <p className="text-sm text-gray-500">
+                  Mostrando página {page} de {usersQuery.data.totalPages} ({usersQuery.data.totalCount} usuários)
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(usersQuery.data.totalPages, p + 1))}
+                    disabled={page === usersQuery.data.totalPages}
+                  >
+                    Próxima
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <Card>

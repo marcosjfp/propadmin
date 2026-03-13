@@ -175,7 +175,7 @@ export default function Home() {
                   {user?.role === "admin" ? "Administrador" : user?.role === "agent" ? "Corretor" : "Usuário"}
                 </p>
               </div>
-              {user?.isAgent && (
+                {(user?.role === 'agent' || user?.role === 'admin') && (
                 <div>
                   <p className="text-sm text-gray-600">CRECI</p>
                   <p className="text-lg font-semibold">{user?.creci || "-"}</p>

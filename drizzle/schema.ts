@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, bigint } from "drizzle-orm/mysql-core";
 
 /**
  * Tabela de usuários - base para autenticação e gestão de papéis
@@ -11,7 +11,6 @@ export const users = mysqlTable("users", {
   phone: varchar("phone", { length: 20 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "agent", "admin"]).default("user").notNull(),
-  isAgent: boolean("isAgent").default(false).notNull(),
   creci: varchar("creci", { length: 50 }), // Número CRECI para agentes imobiliários
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -30,7 +29,7 @@ export const properties = mysqlTable("properties", {
   description: text("description"),
   type: mysqlEnum("type", ["apartamento", "casa", "terreno", "comercial", "outro"]).notNull(),
   transactionType: mysqlEnum("transactionType", ["venda", "aluguel"]).notNull(),
-  price: int("price").notNull(), // Preço em centavos para evitar problemas com decimais
+  price: bigint("price", { mode: "number" }).notNull(), // Preço em centavos para evitar problemas com decimais
   size: int("size").notNull(), // Tamanho em metros quadrados
   rooms: int("rooms").notNull(),
   bathrooms: int("bathrooms").notNull(),
@@ -64,9 +63,9 @@ export const commissions = mysqlTable("commissions", {
   propertyId: int("propertyId").notNull().references(() => properties.id, { onDelete: "cascade" }), // Foreign key para properties
   agentId: int("agentId").notNull().references(() => users.id, { onDelete: "cascade" }), // Foreign key para users
   transactionType: mysqlEnum("transactionType", ["venda", "aluguel"]).notNull(),
-  transactionAmount: int("transactionAmount").notNull(), // Valor da transação em centavos
+  transactionAmount: bigint("transactionAmount", { mode: "number" }).notNull(), // Valor da transação em centavos
   commissionRate: int("commissionRate").notNull(), // Taxa em percentual (ex: 800 = 8%)
-  commissionAmount: int("commissionAmount").notNull(), // Valor da comissão em centavos
+  commissionAmount: bigint("commissionAmount", { mode: "number" }).notNull(), // Valor da comissão em centavos
   status: mysqlEnum("status", ["pendente", "paga", "cancelada"]).default("pendente").notNull(),
   paymentDate: timestamp("paymentDate"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
