@@ -26,11 +26,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["../shared/*"]
-    }
+    },
+    "outDir": "./dist"
   },
   "include": ["src/**/*", "vite.config.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }],
-  "compilerOptions": {
-    "outDir": "./dist"
-  }
+  "references": [{ "path": "./tsconfig.node.json" }]
 }
