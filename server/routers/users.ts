@@ -41,6 +41,69 @@ export const usersRouter = router({
       return { success: true };
     }),
 
+  // List pending users (admin only)
+  listPending: adminProcedure.query(async ({ ctx }) => {
+    return await ctx.db
+      .select()
+      .from(users)
+      .where(eq(users.status, 'pending'))
+      .orderBy(desc(users.createdAt));
+  }),
+
+  // Approve a user (admin only)
+  approve: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(users)
+        .set({ status: 'active' })
+        .where(eq(users.id, input.id));
+
+      const [user] = await ctx.db.select().from(users).where(eq(users.id, input.id)).limit(1);
+
+      if (user) {
+        await createAuditLog({
+          ctx,
+          action: 'user_updated',
+          entityType: 'user',
+          entityId: input.id,
+          entityName: user.name || user.email || `User #${input.id}`,
+          previousValue: { status: 'pending' },
+          newValue: { status: 'active' },
+          description: `Usuário "${user.name || user.email}" aprovado`,
+        });
+      }
+
+      return { success: true };
+    }),
+
+  // Reject a user (admin only)
+  reject: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(users)
+        .set({ status: 'rejected' })
+        .where(eq(users.id, input.id));
+
+      const [user] = await ctx.db.select().from(users).where(eq(users.id, input.id)).limit(1);
+
+      if (user) {
+        await createAuditLog({
+          ctx,
+          action: 'user_updated',
+          entityType: 'user',
+          entityId: input.id,
+          entityName: user.name || user.email || `User #${input.id}`,
+          previousValue: { status: 'pending' },
+          newValue: { status: 'rejected' },
+          description: `Usuário "${user.name || user.email}" rejeitado`,
+        });
+      }
+
+      return { success: true };
+    }),
+
   // List all users with pagination (admin only)
   list: adminProcedure
     .input(z.object({ 

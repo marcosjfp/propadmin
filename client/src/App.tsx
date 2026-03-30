@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import Properties from "./pages/Properties";
 import Users from "./pages/Users";
 import Commissions from "./pages/Commissions";
@@ -22,6 +23,7 @@ function Router() {
   return (
     <Switch>
       <Route path={"/login"} component={Login} />
+      <Route path={"/signup"} component={Signup} />
       <Route path={"/"} component={Home} />
       
       {/* Public/Authenticated routes */}
