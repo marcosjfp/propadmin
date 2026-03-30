@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure, agentProcedure, adminProcedure } from '../trpc.js';
+import { router, publicProcedure, protectedProcedure, agentProcedure, adminProcedure } from '../trpc.js';
 import { users, properties as propertiesSchema } from '../../drizzle/schema.js';
 import { eq, and, desc, or, sql } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
@@ -52,8 +52,9 @@ export const propertiesRouter = router({
     return result;
   }),
 
-  // List all properties with pagination (admin only) - includes pending approval
-  listAll: adminProcedure
+  // List properties with pagination (protected)
+  // Admins see all. Agents see active + their own. Users see only active.
+  listAll: protectedProcedure
     .input(z.object({ 
       page: z.number().min(1).default(1), 
       pageSize: z.number().min(1).max(100).default(20),
@@ -105,7 +106,27 @@ export const propertiesRouter = router({
         whereConditions.push(sql`${propertiesSchema.rooms} >= ${minRooms}`);
       }
 
-      const finalWhere = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+      const roleFilters = [];
+      if (ctx.user.role === 'admin') {
+        // Admins see everything matching other filters
+      } else if (ctx.user.role === 'agent') {
+        // Agents see active properties OR their own properties
+        roleFilters.push(
+          or(
+            and(eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)),
+            eq(propertiesSchema.agentId, ctx.user.id),
+            eq(propertiesSchema.assignedAgentId, ctx.user.id)
+          )
+        );
+      } else {
+        // Regular users only see active & approved properties
+        roleFilters.push(
+          and(eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true))
+        );
+      }
+      
+      const allConditions = [...whereConditions, ...roleFilters];
+      const finalWhere = allConditions.length > 0 ? and(...allConditions) : undefined;
 
       const items = await ctx.db
         .select({
