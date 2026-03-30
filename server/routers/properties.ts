@@ -289,14 +289,17 @@ export const propertiesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
       
-      // Check if property belongs to agent
+      // Check if property belongs to agent or is assigned to them
       const [property] = await ctx.db
         .select()
         .from(propertiesSchema)
         .where(
           and(
             eq(propertiesSchema.id, id),
-            eq(propertiesSchema.agentId, ctx.user.id)
+            or(
+              eq(propertiesSchema.agentId, ctx.user.id),
+              eq(propertiesSchema.assignedAgentId, ctx.user.id)
+            )
           )
         )
         .limit(1);
@@ -352,14 +355,17 @@ export const propertiesRouter = router({
   delete: agentProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      // Check if property belongs to agent
+      // Check if property belongs to agent or is assigned to them
       const [property] = await ctx.db
         .select()
         .from(propertiesSchema)
         .where(
           and(
             eq(propertiesSchema.id, input.id),
-            eq(propertiesSchema.agentId, ctx.user.id)
+            or(
+              eq(propertiesSchema.agentId, ctx.user.id),
+              eq(propertiesSchema.assignedAgentId, ctx.user.id)
+            )
           )
         )
         .limit(1);

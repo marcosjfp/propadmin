@@ -1,37 +1,50 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { APP_TITLE, getLoginUrl } from "@/const";
-import { useLocation } from "wouter";
-import { Home as HomeIcon, Shield, Briefcase, User, LogIn } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { APP_TITLE } from "@/const";
+import { Link, useLocation } from "wouter";
+import { Home as HomeIcon, LogIn } from "lucide-react";
+import { useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 export default function Login() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, refresh } = useAuth();
   const [, setLocation] = useLocation();
 
-  // Se já estiver autenticado, redireciona para home
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const loginMutation = trpc.auth.login.useMutation();
+
+  // If already authenticated, redirect to home
   if (!loading && isAuthenticated) {
     setLocation("/");
     return null;
   }
 
-  const handleLogin = (userType?: string) => {
-    const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
-    
-    if (!oauthPortalUrl || oauthPortalUrl === "") {
-      // Use login direto de desenvolvimento com tipo de usuário
-      const url = userType 
-        ? `/api/dev-login?role=${userType}`
-        : "/api/dev-login-page";
-      window.location.href = url;
-    } else {
-      window.location.href = getLoginUrl();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username || !password) {
+      toast.error("Por favor, preencha usuário e senha");
+      return;
+    }
+
+    try {
+      await loginMutation.mutateAsync({ username, password });
+      toast.success("Login realizado com sucesso");
+      await refresh();
+      setLocation("/");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao fazer login");
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl">
+      <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="bg-blue-600 rounded-2xl p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center shadow-lg">
@@ -41,95 +54,62 @@ export default function Login() {
           <p className="text-gray-600">Sistema de gestão imobiliária</p>
         </div>
 
-        {/* Cards de seleção de perfil */}
-        <div className="grid sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
-          {/* Admin */}
-          <Card 
-            className="hover:shadow-xl cursor-pointer transition-all transform hover:-translate-y-1 border-2 hover:border-purple-400"
-            onClick={() => handleLogin("admin")}
-          >
-            <CardHeader className="text-center pb-2">
-              <div className="mx-auto bg-purple-100 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
-                <Shield className="h-8 w-8 text-purple-600" />
+        <Card className="shadow-xl">
+          <CardHeader>
+            <CardTitle className="text-2xl text-center">Entrar</CardTitle>
+            <CardDescription className="text-center">
+              Acesse sua conta com suas credenciais
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username">Usuário</Label>
+                <Input
+                  id="username"
+                  placeholder="Seu nome de usuário"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={loginMutation.isPending}
+                />
               </div>
-              <CardTitle className="text-lg">Administrador</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center">
-              <CardDescription className="text-sm">
-                Acesso completo ao sistema. Gerencie usuários, corretores, imóveis e comissões.
-              </CardDescription>
-              <Button 
-                className="w-full mt-4 bg-purple-600 hover:bg-purple-700"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleLogin("admin");
-                }}
-              >
-                <LogIn className="h-4 w-4 mr-2" />
-                Entrar como Admin
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Corretor */}
-          <Card 
-            className="hover:shadow-xl cursor-pointer transition-all transform hover:-translate-y-1 border-2 hover:border-blue-400"
-            onClick={() => handleLogin("agent")}
-          >
-            <CardHeader className="text-center pb-2">
-              <div className="mx-auto bg-blue-100 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
-                <Briefcase className="h-8 w-8 text-blue-600" />
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loginMutation.isPending}
+                />
               </div>
-              <CardTitle className="text-lg">Corretor</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center">
-              <CardDescription className="text-sm">
-                Cadastre e gerencie seus imóveis, acompanhe suas vendas e comissões.
-              </CardDescription>
               <Button 
-                className="w-full mt-4 bg-blue-600 hover:bg-blue-700"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleLogin("agent");
-                }}
+                type="submit" 
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                disabled={loginMutation.isPending}
               >
-                <LogIn className="h-4 w-4 mr-2" />
-                Entrar como Corretor
+                {loginMutation.isPending ? "Entrando..." : (
+                  <>
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Entrar
+                  </>
+                )}
               </Button>
-            </CardContent>
-          </Card>
-
-          {/* Usuário */}
-          <Card 
-            className="hover:shadow-xl cursor-pointer transition-all transform hover:-translate-y-1 border-2 hover:border-green-400"
-            onClick={() => handleLogin("user")}
-          >
-            <CardHeader className="text-center pb-2">
-              <div className="mx-auto bg-green-100 rounded-full p-4 w-16 h-16 flex items-center justify-center mb-2">
-                <User className="h-8 w-8 text-green-600" />
-              </div>
-              <CardTitle className="text-lg">Usuário</CardTitle>
-            </CardHeader>
-            <CardContent className="text-center">
-              <CardDescription className="text-sm">
-                Visualize imóveis disponíveis e entre em contato com corretores.
-              </CardDescription>
-              <Button 
-                className="w-full mt-4 bg-green-600 hover:bg-green-700"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleLogin("user");
-                }}
-              >
-                <LogIn className="h-4 w-4 mr-2" />
-                Entrar como Usuário
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+            </form>
+          </CardContent>
+          <CardFooter className="flex flex-col space-y-2 relative before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-gray-200">
+            <div className="text-sm text-center text-gray-500 pt-4">
+              Não tem uma conta?{" "}
+              <Link href="/signup">
+                <span className="text-blue-600 hover:underline cursor-pointer font-medium">Cadastre-se</span>
+              </Link>
+            </div>
+          </CardFooter>
+        </Card>
 
         {/* Footer */}
-        <div className="text-center">
+        <div className="text-center mt-8">
           <p className="text-xs text-gray-500">
             © {new Date().getFullYear()} {APP_TITLE}. Todos os direitos reservados.
           </p>
