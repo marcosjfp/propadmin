@@ -37,7 +37,7 @@ export function PropertyCard({
   isDeleting,
   isApproving
 }: PropertyCardProps) {
-  const isOwner = currentUserId === property.agentId;
+  const isOwner = currentUserId === property.agentId || currentUserId === property.assignedAgentId;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("pt-BR", {

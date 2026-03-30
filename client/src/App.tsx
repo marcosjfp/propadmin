@@ -34,7 +34,7 @@ function Router() {
       <ProtectedRoute 
         path="/propriedades" 
         component={Properties} 
-        allowedRoles={["agent", "admin"]} 
+        allowedRoles={["user", "agent", "admin"]} 
       />
       <ProtectedRoute 
         path="/meu-dashboard" 
