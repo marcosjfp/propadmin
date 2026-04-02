@@ -1,4 +1,3 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +5,6 @@ import { Link } from "wouter";
 import { ArrowLeft, CheckCircle, Clock, XCircle } from "lucide-react";
 
 export default function MyCommissions() {
-  const { } = useAuth();
   const commissionsQuery = trpc.commissions.myCommissions.useQuery();
 
   const formatPrice = (price: number) => {
@@ -148,4 +146,3 @@ export default function MyCommissions() {
     </div>
   );
 }
-

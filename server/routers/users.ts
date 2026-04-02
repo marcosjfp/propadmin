@@ -187,7 +187,15 @@ export const usersRouter = router({
 
       await ctx.db
         .insert(users)
-        .values(input);
+        .values({
+          openId: input.openId,
+          name: input.name,
+          email: input.email,
+          phone: input.phone,
+          loginMethod: input.loginMethod,
+          role: input.role,
+          creci: input.creci,
+        });
       
       // Buscar o usuário recém-criado pelo openId
       const [user] = await ctx.db

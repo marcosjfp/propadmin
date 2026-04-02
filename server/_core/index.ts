@@ -97,7 +97,10 @@ app.get('/api/dev-login', async (req, res) => {
   }
   try {
     // Check query param for role (default: agent)
-    const role = req.query.role as string || 'agent';
+    const roleParam = typeof req.query.role === 'string' ? req.query.role : 'agent';
+    const role: 'user' | 'agent' | 'admin' = ['user', 'agent', 'admin'].includes(roleParam)
+      ? (roleParam as 'user' | 'agent' | 'admin')
+      : 'agent';
     
     // Buscar usuário do banco de dados pelo role
     const [dbUser] = await db
@@ -116,7 +119,6 @@ app.get('/api/dev-login', async (req, res) => {
       id: dbUser.id,
       email: dbUser.email,
       role: dbUser.role,
-      isAgent: dbUser.isAgent,
     });
     
     console.log(`🔐 Setting JWT session cookie for user: ${dbUser.name} (${dbUser.role}) [ID: ${dbUser.id}]`);
