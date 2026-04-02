@@ -47,7 +47,7 @@ export const propertiesRouter = router({
       })
       .from(propertiesSchema)
       .leftJoin(users, eq(propertiesSchema.agentId, users.id))
-      .where(eq(propertiesSchema.status, 'ativa'))
+      .where(and(eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)))
       .orderBy(desc(propertiesSchema.createdAt));
     return result;
   }),
@@ -218,7 +218,24 @@ export const propertiesRouter = router({
         .leftJoin(assignedAgent, eq(propertiesSchema.assignedAgentId, assignedAgent.id))
         .where(eq(propertiesSchema.id, input.id))
         .limit(1);
-      return property;
+
+      if (!property) {
+        return null;
+      }
+
+      const isPubliclyVisible = property.status === 'ativa' && property.isApproved;
+      if (ctx.user?.role === 'admin' || isPubliclyVisible) {
+        return property;
+      }
+
+      if (
+        ctx.user?.role === 'agent' &&
+        (property.agentId === ctx.user.id || property.assignedAgentId === ctx.user.id)
+      ) {
+        return property;
+      }
+
+      return null;
     }),
 
   // Create a new property (agent only - will be pending approval unless admin)
@@ -249,7 +266,21 @@ export const propertiesRouter = router({
         await ctx.db
           .insert(propertiesSchema)
           .values({
-            ...input,
+            title: input.title,
+            description: input.description,
+            type: input.type,
+            transactionType: input.transactionType,
+            price: input.price,
+            size: input.size,
+            rooms: input.rooms,
+            bathrooms: input.bathrooms,
+            hasBackyard: input.hasBackyard,
+            hasLivingRoom: input.hasLivingRoom,
+            hasKitchen: input.hasKitchen,
+            address: input.address,
+            city: input.city,
+            state: input.state,
+            zipCode: input.zipCode,
             agentId: ctx.user.id,
             status: isAdmin ? 'ativa' : 'pendente',
             isApproved: isAdmin,
@@ -672,7 +703,7 @@ export const propertiesRouter = router({
     const result = await ctx.db
       .selectDistinct({ city: propertiesSchema.city })
       .from(propertiesSchema)
-      .where(eq(propertiesSchema.status, 'ativa'))
+      .where(and(eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)))
       .orderBy(propertiesSchema.city);
     return result.map(r => r.city).filter(Boolean);
   }),

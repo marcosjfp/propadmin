@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": [
+    "server/**/*.ts",
+    "drizzle/**/*.ts",
+    "shared/**/*.ts",
+    "drizzle.config.ts"
+  ],
+  "exclude": ["client", "node_modules"]
+}

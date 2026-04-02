@@ -44,8 +44,7 @@ export default function PropertyDetails() {
 
   const propertyQuery = trpc.properties.getById.useQuery({ id: propertyId });
   const agentsQuery = trpc.users.listAgents.useQuery();
-  const createCommissionMutation = trpc.commissions.create.useMutation();
-  const updatePropertyMutation = trpc.properties.update.useMutation();
+  const registerTransactionMutation = trpc.commissions.registerTransaction.useMutation();
 
   const property = propertyQuery.data;
   const agent = agentsQuery.data?.find(a => a.id === property?.agentId);
@@ -101,18 +100,10 @@ export default function PropertyDetails() {
       return;
     }
 
-    const newStatus = property.transactionType === "venda" ? "vendida" : "alugada";
-
     try {
-      const result = await createCommissionMutation.mutateAsync({
+      const result = await registerTransactionMutation.mutateAsync({
         propertyId: property.id,
-        transactionType: property.transactionType,
         transactionAmount: amount,
-      });
-
-      await updatePropertyMutation.mutateAsync({
-        id: property.id,
-        status: newStatus,
       });
 
       // Mostrar toast com valores atualizados do backend
@@ -551,9 +542,9 @@ export default function PropertyDetails() {
             <Button
               className="w-full bg-green-600 hover:bg-green-700"
               onClick={handleConfirmTransaction}
-              disabled={createCommissionMutation.isPending || updatePropertyMutation.isPending}
+              disabled={registerTransactionMutation.isPending}
             >
-              {createCommissionMutation.isPending || updatePropertyMutation.isPending
+              {registerTransactionMutation.isPending
                 ? "Processando..."
                 : `Confirmar ${property.transactionType === "venda" ? "Venda" : "Aluguel"}`}
             </Button>

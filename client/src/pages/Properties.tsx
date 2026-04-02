@@ -31,6 +31,8 @@ export default function Properties() {
   const [customCommissionRate, setCustomCommissionRate] = useState<string>("");
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deletingPropertyId, setDeletingPropertyId] = useState<number | null>(null);
+  const [approvingPropertyId, setApprovingPropertyId] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -68,7 +70,7 @@ export default function Properties() {
   const setCustomCommissionMutation = trpc.properties.setCustomCommission.useMutation();
   const approveMutation = trpc.properties.approve.useMutation();
   const rejectMutation = trpc.properties.reject.useMutation();
-  const createCommissionMutation = trpc.commissions.create.useMutation();
+  const registerTransactionMutation = trpc.commissions.registerTransaction.useMutation();
 
   const isAdmin = user?.role === "admin";
 
@@ -191,6 +193,7 @@ export default function Properties() {
 
   const handleDelete = async (id: number) => {
     if (confirm("Tem certeza que deseja deletar esta propriedade?")) {
+      setDeletingPropertyId(id);
       try {
         const data = propertiesQuery.data;
         const items = data && 'items' in data ? data.items : (Array.isArray(data) ? data : undefined);
@@ -200,17 +203,22 @@ export default function Properties() {
         propertiesQuery.refetch();
       } catch (error: any) {
         systemToast.error(error?.message || "Falha ao deletar propriedade");
+      } finally {
+        setDeletingPropertyId(null);
       }
     }
   };
 
   const handleApprove = async (id: number) => {
+    setApprovingPropertyId(id);
     try {
       await approveMutation.mutateAsync({ propertyId: id });
       systemToast.success("Propriedade aprovada com sucesso");
       propertiesQuery.refetch();
     } catch (error: any) {
       systemToast.error(error?.message || "Erro ao aprovar propriedade");
+    } finally {
+      setApprovingPropertyId(null);
     }
   };
   const handleOpenAssignDialog = (property: RouterOutput["properties"]["listAll"]["items"][0]) => {
@@ -294,16 +302,10 @@ export default function Properties() {
       systemToast.warning("Por favor, informe um valor válido");
       return;
     }
-    const newStatus = selectedProperty.transactionType === "venda" ? "vendida" : "alugada";
     try {
-      await createCommissionMutation.mutateAsync({
+      await registerTransactionMutation.mutateAsync({
         propertyId: selectedProperty.id,
-        transactionType: selectedProperty.transactionType,
         transactionAmount: amount,
-      });
-      await updateMutation.mutateAsync({
-        id: selectedProperty.id,
-        status: newStatus,
       });
       systemToast.success(`${selectedProperty.transactionType === "venda" ? "Venda" : "Aluguel"} registrada com sucesso`);
       setSellDialogOpen(false);
@@ -370,8 +372,8 @@ export default function Properties() {
                   onImage={handleOpenImageDialog}
                   onCommission={handleOpenCommissionDialog}
                   onSell={handleOpenSellDialog}
-                  isDeleting={deleteMutation.isPending && selectedProperty?.id === property.id}
-                  isApproving={approveMutation.isPending && selectedProperty?.id === property.id}
+                  isDeleting={deleteMutation.isPending && deletingPropertyId === property.id}
+                  isApproving={approveMutation.isPending && approvingPropertyId === property.id}
                 />
               ))}
             </div>
@@ -462,7 +464,7 @@ export default function Properties() {
         transactionAmount={transactionAmount}
         setTransactionAmount={setTransactionAmount}
         onConfirm={handleConfirmTransaction}
-        isPending={createCommissionMutation.isPending || updateMutation.isPending}
+        isPending={registerTransactionMutation.isPending}
         formatPrice={formatPrice}
       />
 
