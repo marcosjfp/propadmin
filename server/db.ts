@@ -20,8 +20,8 @@ function getDatabaseUrl(): string {
     return `mysql://${user}:${password}@${host}:${port}/${database}`;
   }
   
-  // Fallback for local development
-  return 'mysql://root:root@localhost:3306/administrador_de_propriedades';
+  // Fallback for local development without credentials
+  return 'mysql://root@localhost:3306/administrador_de_propriedades';
 }
 
 const DATABASE_URL = getDatabaseUrl();

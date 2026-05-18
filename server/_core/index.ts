@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import * as trpcExpress from '@trpc/server/adapters/express';
 import { appRouter } from '../routers/index.js';
 import { createContext, createJWT } from '../context.js';
@@ -72,12 +73,18 @@ const trpcLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' },
 });
 
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && !process.env.CLIENT_URL) {
+  console.warn('⚠️ WARNING: CLIENT_URL is not set in production. Using generic origin which might cause CORS issues.');
+}
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? true : 'http://localhost:5173'),
+  origin: process.env.CLIENT_URL || (isProduction ? process.env.CLIENT_URL : 'http://localhost:5173'),
   credentials: true,
 }));
+app.use(helmet());
 app.use(generalLimiter);
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
 // tRPC endpoint
@@ -92,8 +99,8 @@ app.use(
 
 // Development login endpoint - Creates a mock authenticated session (dev only)
 app.get('/api/dev-login', async (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'Not available in production' });
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ error: 'Available only in development mode' });
   }
   try {
     // Check query param for role (default: agent)
@@ -145,8 +152,8 @@ app.get('/api/dev-login', async (req, res) => {
 
 // Dev login page with role selection (dev only)
 app.get('/api/dev-login-page', (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(403).json({ error: 'Not available in production' });
+  if (process.env.NODE_ENV !== 'development') {
+    return res.status(403).json({ error: 'Available only in development mode' });
   }
   // Se passou role na query, redireciona direto para o login
   const role = req.query.role as string;

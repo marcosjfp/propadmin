@@ -3,6 +3,8 @@ import { router, publicProcedure, protectedProcedure, adminProcedure } from '../
 import { users } from '../../drizzle/schema.js';
 import { eq, desc, sql, or } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
+import { TRPCError } from '@trpc/server';
+import bcrypt from 'bcryptjs';
 
 export const usersRouter = router({
   // Get current logged-in user
@@ -169,7 +171,7 @@ export const usersRouter = router({
         .limit(1);
       
       if (existing) {
-        throw new Error('Usuário já existe com este identificador');
+        throw new TRPCError({ code: 'CONFLICT', message: 'Usuário já existe com este identificador' });
       }
 
       // Verificar email duplicado
@@ -181,7 +183,7 @@ export const usersRouter = router({
           .limit(1);
         
         if (emailExists) {
-          throw new Error('Email já está em uso');
+          throw new TRPCError({ code: 'CONFLICT', message: 'Email já está em uso' });
         }
       }
 
@@ -265,7 +267,7 @@ export const usersRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Impedir admin de deletar a si mesmo
       if (input.id === ctx.user.id) {
-        throw new Error('Você não pode deletar sua própria conta');
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não pode deletar sua própria conta' });
       }
 
       // Buscar usuário antes de deletar para log
@@ -276,7 +278,7 @@ export const usersRouter = router({
         .limit(1);
 
       if (!userToDelete) {
-        throw new Error('Usuário não encontrado');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Usuário não encontrado' });
       }
       
       await ctx.db
@@ -406,7 +408,6 @@ export const usersRouter = router({
       .select({
         id: users.id,
         name: users.name,
-        email: users.email,
         creci: users.creci,
         createdAt: users.createdAt,
       })
@@ -424,6 +425,12 @@ export const usersRouter = router({
         email: z.string().email("Email inválido"),
         phone: z.string().optional(),
         creci: z.string().min(1, "CRECI é obrigatório para corretores"),
+        username: z.string().min(3, "Usuário deve ter pelo menos 3 caracteres"),
+        password: z.string()
+          .min(8, 'Senha deve ter pelo menos 8 caracteres')
+          .regex(/[A-Z]/, 'Senha deve conter pelo menos uma letra maiúscula')
+          .regex(/[0-9]/, 'Senha deve conter pelo menos um número')
+          .regex(/[^A-Za-z0-9]/, 'Senha deve conter pelo menos um caractere especial'),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -435,22 +442,36 @@ export const usersRouter = router({
         .limit(1);
 
       if (existingUser) {
-        throw new Error('Já existe um usuário com este email');
+        throw new TRPCError({ code: 'CONFLICT', message: 'Já existe um usuário com este email' });
       }
 
-      // Gerar um openId único para o usuário (será atualizado quando ele fizer login)
-      const openId = `admin-created-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      // Verificar se o username já existe
+      const [existingUsername] = await ctx.db
+        .select()
+        .from(users)
+        .where(eq(users.username, input.username))
+        .limit(1);
+
+      if (existingUsername) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Nome de usuário indisponível' });
+      }
+
+      const passwordHash = await bcrypt.hash(input.password, 10);
+      const openId = `local-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
       await ctx.db
         .insert(users)
         .values({
           openId,
           name: input.name,
+          username: input.username,
+          passwordHash,
           email: input.email,
           phone: input.phone,
           role: 'agent',
+          status: 'active',
           creci: input.creci,
-          loginMethod: 'admin-created',
+          loginMethod: 'local',
         });
 
       // Buscar o usuário criado

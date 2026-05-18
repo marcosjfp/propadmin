@@ -105,3 +105,18 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+
+# Sensitive files — cookies / session tokens
+cookie.txt
+cookies.txt
+cookie*.txt
+
+# Dev/test scripts with hardcoded credentials
+test-db.mjs
+test-db-all.mjs
+test-db-final.mjs
+create-db.mjs
+create-db-verified.mjs
+create-db-exhaustive.mjs
+debug-db.mjs
+list-db.mjs

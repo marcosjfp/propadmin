@@ -4,6 +4,7 @@ import { users, properties as propertiesSchema } from '../../drizzle/schema.js';
 import { eq, and, desc, or, sql } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
 import { alias } from 'drizzle-orm/mysql-core';
+import { TRPCError } from '@trpc/server';
 
 // Alias para join com usuário atribuído
 const assignedAgent = alias(users, 'assignedAgent');
@@ -357,7 +358,14 @@ export const propertiesRouter = router({
         .limit(1);
 
       if (!property) {
-        throw new Error('Propriedade não encontrada ou você não tem permissão para editá-la');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada ou você não tem permissão para editá-la' });
+      }
+
+      // Restrict agent status transitions
+      if (ctx.user.role === 'agent' && updateData.status) {
+        if (updateData.status === 'ativa' || updateData.status === 'rejeitada') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Agentes não podem aprovar ou rejeitar propriedades' });
+        }
       }
 
       // Detectar mudança de status
@@ -423,7 +431,7 @@ export const propertiesRouter = router({
         .limit(1);
 
       if (!property) {
-        throw new Error('Propriedade não encontrada ou você não tem permissão para deletá-la');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada ou você não tem permissão para deletá-la' });
       }
 
       await ctx.db
@@ -459,7 +467,7 @@ export const propertiesRouter = router({
         .limit(1);
 
       if (!property) {
-        throw new Error('Propriedade não encontrada');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
       }
 
       // Se está atribuindo a um agente, verificar se o agente existe
@@ -472,11 +480,11 @@ export const propertiesRouter = router({
           .limit(1);
 
         if (!agent) {
-          throw new Error('Corretor não encontrado');
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Corretor não encontrado' });
         }
         
         if (agent.role !== 'agent' && agent.role !== 'admin') {
-          throw new Error('O usuário selecionado não é um corretor');
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'O usuário selecionado não é um corretor' });
         }
         
         assignedAgentName = agent.name;
@@ -537,7 +545,7 @@ export const propertiesRouter = router({
         .limit(1);
 
       if (!property) {
-        throw new Error('Propriedade não encontrada');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
       }
 
       const previousRate = property.customCommissionRate;
@@ -590,11 +598,11 @@ export const propertiesRouter = router({
         .limit(1);
 
       if (!property) {
-        throw new Error('Propriedade não encontrada');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
       }
 
       if (property.isApproved) {
-        throw new Error('Esta propriedade já está aprovada');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Esta propriedade já está aprovada' });
       }
 
       // Buscar nome do agente que criou
@@ -653,11 +661,11 @@ export const propertiesRouter = router({
         .limit(1);
 
       if (!property) {
-        throw new Error('Propriedade não encontrada');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
       }
 
       if (property.isApproved) {
-        throw new Error('Não é possível rejeitar uma propriedade já aprovada');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não é possível rejeitar uma propriedade já aprovada' });
       }
 
       // Buscar nome do agente que criou

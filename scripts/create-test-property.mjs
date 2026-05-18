@@ -1,13 +1,13 @@
 import mysql from 'mysql2/promise';
+import 'dotenv/config';
 
 async function createTestProperty() {
-  const connection = await mysql.createConnection({
-    host: 'localhost',
-    port: 3307,
-    user: 'root',
-    password: 'rootpass123',
-    database: 'administrador_de_propriedades'
-  });
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    console.error('❌ DATABASE_URL environment variable is required. Set it in your .env file.');
+    process.exit(1);
+  }
+  const connection = await mysql.createConnection(dbUrl);
   
   console.log('Conectado ao banco de dados...');
   

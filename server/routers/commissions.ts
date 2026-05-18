@@ -81,12 +81,12 @@ export const commissionsRouter = router({
         .limit(1);
       
       if (!commission) {
-        throw new Error('Comissão não encontrada');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Comissão não encontrada' });
       }
 
       // Verificar permissão: admin pode ver qualquer uma, agente só as próprias
-      if (ctx.user.role !== 'admin' && commission.agentId !== ctx.user.id) {
-        throw new Error('Você não tem permissão para ver esta comissão');
+      if (ctx.user.role === 'agent' && commission.agentId !== ctx.user.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não tem permissão para ver esta comissão' });
       }
 
       return commission;

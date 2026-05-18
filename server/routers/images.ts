@@ -3,6 +3,7 @@ import { router, protectedProcedure, agentProcedure } from '../trpc.js';
 import { propertyImages, properties } from '../../drizzle/schema.js';
 import { eq, and, desc, asc } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
+import { TRPCError } from '@trpc/server';
 
 export const imagesRouter = router({
   // Listar imagens de uma propriedade
@@ -54,11 +55,11 @@ export const imagesRouter = router({
         .limit(1);
 
       if (!property) {
-        throw new Error('Propriedade não encontrada');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
       }
 
-      if (property.agentId !== ctx.user.id && ctx.user.role !== 'admin') {
-        throw new Error('Você não tem permissão para adicionar imagens a esta propriedade');
+      if (ctx.user.role === 'agent' && property.agentId !== ctx.user.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não tem permissão para adicionar imagens a esta propriedade' });
       }
 
       // Verificar limite de 10 imagens
@@ -68,7 +69,7 @@ export const imagesRouter = router({
         .where(eq(propertyImages.propertyId, input.propertyId));
 
       if (existingImages.length >= 10) {
-        throw new Error('Limite máximo de 10 imagens atingido');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Limite máximo de 10 imagens atingido' });
       }
 
       // Se é a primeira imagem ou marcada como principal, definir como principal
@@ -141,7 +142,7 @@ export const imagesRouter = router({
         .limit(1);
 
       if (!image) {
-        throw new Error('Imagem não encontrada');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Imagem não encontrada' });
       }
 
       // Verificar permissão
@@ -222,7 +223,7 @@ export const imagesRouter = router({
         .limit(1);
 
       if (!image) {
-        throw new Error('Imagem não encontrada');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Imagem não encontrada' });
       }
 
       // Verificar permissão

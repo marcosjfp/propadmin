@@ -7,6 +7,9 @@ import { createJWT } from '../context';
 import { COOKIE_NAME } from '../../shared/const';
 import bcrypt from 'bcryptjs';
 
+// In-memory brute force protection
+const loginAttempts = new Map<string, { count: number, lockedUntil: number }>();
+
 export const authRouter = router({
   // Get current authenticated user
   me: publicProcedure.query(async ({ ctx }) => {
@@ -28,13 +31,29 @@ export const authRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { username, password } = input;
       
+      const attempt = loginAttempts.get(username);
+      if (attempt && attempt.lockedUntil > Date.now()) {
+        const remainingMinutes = Math.ceil((attempt.lockedUntil - Date.now()) / 60000);
+        throw new TRPCError({
+          code: 'TOO_MANY_REQUESTS',
+          message: `Conta bloqueada temporariamente. Tente novamente em ${remainingMinutes} minuto(s).`,
+        });
+      }
+      
       const [user] = await ctx.db
         .select()
         .from(users)
         .where(eq(users.username, username))
         .limit(1);
 
-      if (!user) {
+      // Dummy compare to mitigate timing attacks
+      if (!user || !user.passwordHash) {
+        await bcrypt.compare(password, '$2a$10$ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz');
+        
+        const count = (attempt?.count || 0) + 1;
+        const lockedUntil = count >= 5 ? Date.now() + 15 * 60 * 1000 : 0;
+        loginAttempts.set(username, { count, lockedUntil });
+
         throw new TRPCError({
           code: 'UNAUTHORIZED',
           message: 'Usuário ou senha inválidos',
@@ -55,14 +74,21 @@ export const authRouter = router({
         });
       }
 
-      const isPasswordValid = user.passwordHash ? await bcrypt.compare(password, user.passwordHash) : false;
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
       
       if (!isPasswordValid) {
+        const count = (attempt?.count || 0) + 1;
+        const lockedUntil = count >= 5 ? Date.now() + 15 * 60 * 1000 : 0;
+        loginAttempts.set(username, { count, lockedUntil });
+        
         throw new TRPCError({
           code: 'UNAUTHORIZED',
           message: 'Usuário ou senha inválidos',
         });
       }
+
+      // Reset login attempts on success
+      loginAttempts.delete(username);
 
       const token = createJWT({ id: user.id, email: user.email, role: user.role });
 
@@ -90,7 +116,11 @@ export const authRouter = router({
     .input(z.object({
       name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
       username: z.string().min(3, 'Usuário deve ter pelo menos 3 caracteres'),
-      password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+      password: z.string()
+        .min(8, 'Senha deve ter pelo menos 8 caracteres')
+        .regex(/[A-Z]/, 'Senha deve conter pelo menos uma letra maiúscula')
+        .regex(/[0-9]/, 'Senha deve conter pelo menos um número')
+        .regex(/[^A-Za-z0-9]/, 'Senha deve conter pelo menos um caractere especial'),
       email: z.string().email('E-mail inválido'),
       role: z.enum(['user', 'agent']).default('user'),
     }))

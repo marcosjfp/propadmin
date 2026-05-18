@@ -83,6 +83,8 @@ export async function createContext({ req, res }: trpcExpress.CreateExpressConte
     user,
     req,
     res,
+    ip: req.ip || req.socket?.remoteAddress,
+    userAgent: req.get('user-agent'),
   };
 }
 

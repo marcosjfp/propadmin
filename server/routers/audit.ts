@@ -48,8 +48,8 @@ export async function createAuditLog({
       previousValue: previousValue ? JSON.stringify(previousValue) : null,
       newValue: newValue ? JSON.stringify(newValue) : null,
       description,
-      ipAddress: null, // Pode ser obtido do request se necessário
-      userAgent: null,
+      ipAddress: ctx.ip ? String(ctx.ip).substring(0, 45) : null,
+      userAgent: ctx.userAgent || null,
     });
   } catch (error) {
     // Log de auditoria não deve quebrar a operação principal
