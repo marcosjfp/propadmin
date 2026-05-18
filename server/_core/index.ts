@@ -357,12 +357,12 @@ if (staticFilesPath) {
   app.use(express.static(staticFilesPath));
   
   // Catch-all route for SPA - must be after all other routes
-  app.get('*', (req, res) => {
+  app.get('*all', (req, res) => {
     res.sendFile(path.join(staticFilesPath!, 'index.html'));
   });
 } else {
   // Fallback: serve a simple HTML page
-  app.get('*', (req, res) => {
+  app.get('*all', (req, res) => {
     res.send(`
       <!DOCTYPE html>
       <html>
