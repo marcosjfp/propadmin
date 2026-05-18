@@ -24,8 +24,10 @@ console.log(`🔌 PORT: ${process.env.PORT || 3000}`);
 
 // Detect static files path
 const possibleStaticPaths = [
+  path.join(process.cwd(), 'dist'),
   path.join(process.cwd(), 'client', 'dist'),
   '/app/client/dist',
+  path.join(__dirname, '..', '..', 'dist'),
   path.join(__dirname, '..', '..', 'client', 'dist'),
 ];
 
