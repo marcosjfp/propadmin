@@ -130,11 +130,10 @@ app.get('/api/dev-login', async (req, res) => {
     
     console.log(`🔐 Setting JWT session cookie for user: ${dbUser.name} (${dbUser.role}) [ID: ${dbUser.id}]`);
     
-    // Cookie settings for production
-    const isProduction = process.env.NODE_ENV === 'production';
+    // Cookie settings for development
     res.cookie(COOKIE_NAME, jwtToken, {
       httpOnly: true,
-      secure: isProduction,
+      secure: false,
       sameSite: 'lax', // 'lax' works for same-site redirects
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
       path: '/',
@@ -406,7 +405,11 @@ async function startServer() {
   }
 }
 
-startServer().catch((error) => {
-  console.error('Failed to start server:', error);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  startServer().catch((error) => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  });
+}
+
+export default app;

@@ -46,7 +46,7 @@ function getPool(): mysql.Pool {
 // Lazy Drizzle instance creation
 function getDb() {
   if (!dbInstance) {
-    dbInstance = drizzle(getPool(), { schema, mode: 'default' });
+    dbInstance = drizzle(getPool(), { schema, mode: 'default' }) as any;
   }
   return dbInstance;
 }
