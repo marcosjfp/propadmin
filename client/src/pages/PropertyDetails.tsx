@@ -43,11 +43,15 @@ export default function PropertyDetails() {
   const [transactionAmount, setTransactionAmount] = useState("");
 
   const propertyQuery = trpc.properties.getById.useQuery({ id: propertyId });
-  const agentsQuery = trpc.users.listAgents.useQuery();
   const registerTransactionMutation = trpc.commissions.registerTransaction.useMutation();
 
   const property = propertyQuery.data;
-  const agent = agentsQuery.data?.find(a => a.id === property?.agentId);
+  const agent = property ? {
+    id: property.agentId,
+    name: property.agentName,
+    creci: property.agentCreci,
+    email: property.agentEmail,
+  } : null;
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("pt-BR", {

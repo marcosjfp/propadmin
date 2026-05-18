@@ -47,6 +47,8 @@ export default function AdminDashboard() {
     email: "",
     phone: "",
     creci: "",
+    username: "",
+    password: "",
   });
 
   const [userPage, setUserPage] = useState(1);
@@ -205,16 +207,20 @@ export default function AdminDashboard() {
   console.debug('handlePromoteToAgent available:', typeof handlePromoteToAgent);
 
   const handleCreateAgent = async () => {
-    if (!newAgentForm.name.trim()) {
-      toast.error("Nome é obrigatório");
+    if (!newAgentForm.username.trim()) {
+      toast.error("Usuário é obrigatório");
       return;
     }
-    if (!newAgentForm.email.trim()) {
-      toast.error("Email é obrigatório");
+    if (newAgentForm.username.trim().length < 3) {
+      toast.error("Usuário deve ter pelo menos 3 caracteres");
       return;
     }
-    if (!newAgentForm.creci.trim()) {
-      toast.error("CRECI é obrigatório");
+    if (!newAgentForm.password.trim()) {
+      toast.error("Senha é obrigatória");
+      return;
+    }
+    if (newAgentForm.password.trim().length < 8) {
+      toast.error("Senha deve ter pelo menos 8 caracteres");
       return;
     }
 
@@ -222,7 +228,7 @@ export default function AdminDashboard() {
       await createAgentMutation.mutateAsync(newAgentForm);
       toast.success("Corretor criado com sucesso!");
       setCreateAgentDialogOpen(false);
-      setNewAgentForm({ name: "", email: "", phone: "", creci: "" });
+      setNewAgentForm({ name: "", email: "", phone: "", creci: "", username: "", password: "" });
       usersQuery.refetch();
     } catch (error: any) {
       toast.error("Erro ao criar corretor: " + (error?.message || "Erro desconhecido"));
@@ -935,6 +941,23 @@ export default function AdminDashboard() {
                 value={newAgentForm.creci}
                 onChange={(e) => setNewAgentForm({ ...newAgentForm, creci: e.target.value })}
                 placeholder="Ex: 12345-F"
+              />
+            </div>
+            <div>
+              <Label>Nome de Usuário *</Label>
+              <Input
+                value={newAgentForm.username}
+                onChange={(e) => setNewAgentForm({ ...newAgentForm, username: e.target.value })}
+                placeholder="Ex: joaosilva"
+              />
+            </div>
+            <div>
+              <Label>Senha *</Label>
+              <Input
+                type="password"
+                value={newAgentForm.password}
+                onChange={(e) => setNewAgentForm({ ...newAgentForm, password: e.target.value })}
+                placeholder="Mín. 8 caracteres, maiúscula, número, caractere especial"
               />
             </div>
             <Button 
