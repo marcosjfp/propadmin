@@ -1,4 +1,5 @@
 # PropAdmin 🏢
+Marcos Fermandes
 
 PropAdmin is a comprehensive, production-ready Property Administration System built for modern real estate management. It provides end-to-end functionality for managing properties, assigning agents, tracking commissions, and logging system audits.
 
