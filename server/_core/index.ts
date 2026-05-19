@@ -91,7 +91,7 @@ app.use(cookieParser());
 
 // tRPC endpoint
 app.use(
-  '/trpc',
+  ['/trpc', '/api/trpc'],
   trpcLimiter,
   trpcExpress.createExpressMiddleware({
     router: appRouter,

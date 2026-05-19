@@ -14,6 +14,7 @@
   },
   "include": [
     "server/**/*.ts",
+    "api/**/*.ts",
     "drizzle/**/*.ts",
     "shared/**/*.ts",
     "drizzle.config.ts"
