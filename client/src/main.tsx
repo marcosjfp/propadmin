@@ -18,6 +18,12 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
+  // Prevent infinite redirect loops if we are already on the login pages
+  const currentPath = window.location.pathname;
+  if (currentPath === "/login" || currentPath === "/api/dev-login-page") {
+    return;
+  }
+
   window.location.href = getLoginUrl();
 };
 

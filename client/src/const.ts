@@ -6,9 +6,9 @@ export const APP_TITLE = import.meta.env.VITE_APP_TITLE || "Administrador de Pro
 export const getLoginUrl = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
   
-  // If OAuth is not configured, use dev-login endpoint
+  // If OAuth is not configured, use dev-login page in dev, otherwise use client-side /login route in production
   if (!oauthPortalUrl || oauthPortalUrl === "") {
-    return "/api/dev-login";
+    return import.meta.env.DEV ? "/api/dev-login-page" : "/login";
   }
   
   const appId = import.meta.env.VITE_APP_ID;
