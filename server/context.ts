@@ -1,10 +1,14 @@
 import { inferAsyncReturnType } from '@trpc/server';
 import * as trpcExpress from '@trpc/server/adapters/express';
+import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { db } from './db.js';
 import { COOKIE_NAME } from '../shared/const.js';
 import { users } from '../drizzle/schema.js';
 import { eq } from 'drizzle-orm';
+
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 
 // Chave secreta para JWT - obrigatória via variável de ambiente
 if (!process.env.JWT_SECRET) {
