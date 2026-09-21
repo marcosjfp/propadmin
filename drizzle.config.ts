@@ -10,12 +10,12 @@ const url = new URL(connectionString);
 export default defineConfig({
   schema: "./drizzle/schema.ts",
   out: "./drizzle",
-  dialect: "mysql", 
+  dialect: "postgresql",
   dbCredentials: {
     host: url.hostname,
     user: url.username,
     password: url.password,
     database: url.pathname.substring(1),
-    port: parseInt(url.port) || 3306,
+    port: parseInt(url.port) || 5432,
   },
 });

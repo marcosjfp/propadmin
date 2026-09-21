@@ -40,7 +40,7 @@ importers:
         version: 16.6.1
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(mysql2@3.15.3)
+        version: 0.45.2(mysql2@3.15.3)(postgres@3.4.9)
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -56,6 +56,9 @@ importers:
       mysql2:
         specifier: ^3.9.0
         version: 3.15.3
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       superjson:
         specifier: ^2.2.1
         version: 2.2.3
@@ -3118,6 +3121,10 @@ packages:
     resolution: {integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postgres@3.4.9:
+    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
+    engines: {node: '>=12'}
+
   prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
@@ -3240,6 +3247,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -5393,9 +5401,10 @@ snapshots:
       esbuild: 0.25.11
       tsx: 4.22.1
 
-  drizzle-orm@0.45.2(mysql2@3.15.3):
+  drizzle-orm@0.45.2(mysql2@3.15.3)(postgres@3.4.9):
     optionalDependencies:
       mysql2: 3.15.3
+      postgres: 3.4.9
 
   dunder-proto@1.0.1:
     dependencies:
@@ -6145,6 +6154,8 @@ snapshots:
       nanoid: 3.3.12
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  postgres@3.4.9: {}
 
   prelude-ls@1.2.1: {}
 

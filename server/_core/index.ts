@@ -52,9 +52,14 @@ const host = '0.0.0.0'; // Necessário para Railway e outros cloud providers
 app.set('trust proxy', 1);
 
 // Health check endpoint PRIMEIRO - antes de qualquer middleware
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
   console.log('🏥 Health check requested');
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const database = await testConnection();
+  res.status(database ? 200 : 503).json({
+    status: database ? 'ok' : 'degraded',
+    database: database ? 'connected' : 'unavailable',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Middleware
@@ -400,7 +405,7 @@ async function startServer() {
   const dbConnected = await testConnection();
   
   if (dbConnected) {
-    console.log('💾 Database: Connected to MySQL');
+    console.log('💾 Database: Connected to Supabase Postgres');
   } else {
     console.log('⚠️  Database: NOT connected - some features may not work');
     console.log('💡 Verifique as variáveis de ambiente do banco de dados');

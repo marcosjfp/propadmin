@@ -7,7 +7,7 @@ PropAdmin is a comprehensive, production-ready Property Administration System bu
 
 - **Frontend:** React, Vite, TailwindCSS, React Router
 - **Backend API:** Node.js, Express, tRPC (Type-safe RPC)
-- **Database:** MySQL
+- **Database:** Supabase PostgreSQL
 - **ORM:** Drizzle ORM
 - **Authentication:** Custom JWT-based Auth + `bcryptjs`
 - **Monorepo Management:** pnpm workspaces
@@ -78,10 +78,10 @@ cp .env.example .env
 ```
 
 Ensure you set:
-- `DATABASE_URL`: Your MySQL connection string.
+- `DATABASE_URL`: The Supabase Postgres connection string. For Vercel, use Supabase's pooler connection string (port `6543`) and add `?pgbouncer=true`.
 - `JWT_SECRET`: A secure, random string for signing tokens.
-- `CLIENT_URL`: The URL of the frontend (e.g., `http://localhost:5173` for dev).
-- `NODE_ENV`: Set to `development` for local testing.
+- `CLIENT_URL`: The deployed Vercel URL, including `https://`.
+- `NODE_ENV`: Set to `production` in Vercel.
 
 ### 2. Installation
 
@@ -93,12 +93,9 @@ pnpm install
 
 ### 3. Database Migration & Seeding
 
-Push the Drizzle schema to your MySQL database and optionally seed the initial admin user:
+Run `drizzle/0007_supabase_postgres.sql` in the Supabase SQL Editor. The legacy `migrate-auth.mjs` script is for the former MySQL setup and should not be used with Supabase.
 
-```bash
-pnpm db:push
-node migrate-auth.mjs
-```
+In Vercel, add `DATABASE_URL`, `JWT_SECRET`, `CLIENT_URL`, and `NODE_ENV` under the **Production** environment, then redeploy. Check `/api/health`; it should return `status: "ok"` and `database: "connected"`.
 
 ### 4. Running the Application
 

@@ -3,7 +3,7 @@ import { router, publicProcedure, protectedProcedure, agentProcedure, adminProce
 import { users, properties as propertiesSchema } from '../../drizzle/schema.js';
 import { eq, and, desc, or, sql } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
-import { alias } from 'drizzle-orm/mysql-core';
+import { alias } from 'drizzle-orm/pg-core';
 import { TRPCError } from '@trpc/server';
 
 // Alias para join com usuário atribuído
