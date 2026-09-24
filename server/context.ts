@@ -25,6 +25,13 @@ interface JWTPayload {
   exp?: number;
 }
 
+interface RequestWithSessionData {
+  cookies?: Record<string, string>;
+  ip?: string;
+  socket?: { remoteAddress?: string };
+  headers?: Record<string, string | undefined>;
+}
+
 // Função para criar token JWT
 export function createJWT(user: { id: number; email?: string | null; role: string }): string {
   return jwt.sign(
@@ -49,10 +56,11 @@ export function verifyJWT(token: string): JWTPayload | null {
 
 // Create context for tRPC
 export async function createContext({ req, res }: trpcExpress.CreateExpressContextOptions) {
+  const request = req as RequestWithSessionData;
   let user = null;
   
   // Try to get user from cookie (JWT)
-  const sessionCookie = req.cookies?.[COOKIE_NAME];
+  const sessionCookie = request.cookies?.[COOKIE_NAME];
   
   if (sessionCookie) {
     try {
@@ -87,8 +95,8 @@ export async function createContext({ req, res }: trpcExpress.CreateExpressConte
     user,
     req,
     res,
-    ip: req.ip || req.socket?.remoteAddress,
-    userAgent: req.get('user-agent'),
+    ip: request.ip || request.socket?.remoteAddress,
+    userAgent: request.headers?.['user-agent'],
   };
 }
 

@@ -94,7 +94,7 @@ export const authRouter = router({
 
       // Cookie settings for production
       const isProduction = process.env.NODE_ENV === 'production';
-      ctx.res.cookie(COOKIE_NAME, token, {
+      (ctx.res as unknown as { cookie: (name: string, value: string, options: Record<string, unknown>) => void }).cookie(COOKIE_NAME, token, {
         httpOnly: true,
         secure: isProduction,
         sameSite: 'lax',
@@ -160,7 +160,7 @@ export const authRouter = router({
   // Logout current user
   logout: publicProcedure.mutation(async ({ ctx }) => {
     // Clear the cookie
-    ctx.res.clearCookie(COOKIE_NAME);
+    (ctx.res as unknown as { clearCookie: (name: string) => void }).clearCookie(COOKIE_NAME);
     return { success: true };
   }),
 });

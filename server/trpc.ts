@@ -11,7 +11,8 @@ export const router = t.router;
 // CSRF Protection Middleware
 const checkCSRF = t.middleware(({ ctx, type, next }) => {
   if (type === 'mutation' && process.env.NODE_ENV === 'production') {
-    const origin = ctx.req?.headers?.origin;
+    const origin = (ctx.req as { headers?: Record<string, string | undefined> })
+      ?.headers?.origin;
     const clientUrl = process.env.CLIENT_URL;
     
     if (clientUrl && origin !== clientUrl) {
