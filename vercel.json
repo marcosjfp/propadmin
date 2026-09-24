@@ -3,11 +3,6 @@
   "version": 2,
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.ts" },
     { "src": "/trpc/(.*)", "dest": "/api/index.ts" },
