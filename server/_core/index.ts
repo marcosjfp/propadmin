@@ -72,7 +72,7 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  skip: (req) => req.path === '/api/health', // skip health checks
+  skip: (req) => req.url?.split('?')[0] === '/api/health', // skip health checks
 });
 
 const trpcLimiter = rateLimit({
