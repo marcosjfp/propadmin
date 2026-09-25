@@ -42,7 +42,6 @@
     "express-rate-limit": "^8.3.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
-    "mysql2": "^3.9.0",
     "postgres": "^3.4.9",
     "superjson": "^2.2.1",
     "tsx": "^4.11.0",

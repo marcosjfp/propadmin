@@ -57,11 +57,13 @@ echo  Pressione Ctrl+C para parar os servidores
 echo ========================================
 echo.
 
-REM Set database URL environment variable
-set DATABASE_URL=mysql://root:rootpass123@localhost:3307/administrador_de_propriedades
+REM Load DATABASE_URL from .env.local if it exists
+for /f "tokens=1,* delims==" %%a in (.env.local) do (
+    if "%%a"=="DATABASE_URL" set DATABASE_URL=%%b
+)
 
 REM Start backend server in a new window
-start "Backend Server" cmd /k "set DATABASE_URL=mysql://root:rootpass123@localhost:3307/administrador_de_propriedades && pnpm exec tsx watch server/_core/index.ts"
+start "Backend Server" cmd /k "pnpm exec tsx watch server/_core/index.ts"
 
 REM Wait for backend to start
 timeout /t 5 /nobreak >nul

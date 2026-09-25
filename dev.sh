@@ -58,11 +58,14 @@ echo "  Pressione Ctrl+C para parar os servidores"
 echo "========================================"
 echo ""
 
-# Set database URL environment variable
-export DATABASE_URL="mysql://root:rootpass123@localhost:3307/administrador_de_propriedades"
+# Load environment variables from .env.local
+if [ -f .env.local ]; then
+  export $(grep -v '^#' .env.local | xargs)
+fi
 
 # Start backend server in background
-DATABASE_URL="mysql://root:rootpass123@localhost:3307/administrador_de_propriedades" pnpm exec tsx watch server/_core/index.ts &
+pnpm exec tsx watch server/_core/index.ts &
+
 BACKEND_PID=$!
 
 # Wait for backend to start

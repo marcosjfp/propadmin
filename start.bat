@@ -10,14 +10,11 @@ echo  Iniciando Ambiente Completo...
 echo ========================================
 echo.
 
-REM 1. Certificar-se de que o Banco de Dados (Docker) está rodando
-echo [INFO] Verificando Banco de Dados...
-docker start mysql-admin-propriedades >nul 2>&1
-if %ERRORLEVEL% neq 0 (
-    echo [AVISO] Nao foi possivel iniciar o container 'mysql-admin-propriedades'.
-    echo Certifique-se de que o Docker Desktop esta aberto e rodando.
-) else (
-    echo [SUCCESS] Banco de Dados MySQL Docker pronto.
+REM 1. Carregar variáveis de ambiente de .env.local se existir
+if exist .env.local (
+    for /f "usebackq tokens=1,* delims==" %%a in (".env.local") do (
+        if "%%a"=="DATABASE_URL" set DATABASE_URL=%%b
+    )
 )
 
 REM 2. Encerrar processos antigos nas portas 3000 e 5173
@@ -29,9 +26,8 @@ for /f "tokens=5" %%a in ('netstat -aon ^| find ":5173" ^| find "LISTENING"') do
     taskkill /F /PID %%a >nul 2>nul
 )
 
-REM 3. Configurar ambiente e iniciar Backend
+REM 3. Iniciar Backend
 echo [INFO] Iniciando Backend: http://localhost:3000
-set DATABASE_URL=mysql://root:rootpass123@localhost:3307/administrador_de_propriedades
 start "Backend Server" cmd /k "pnpm run dev"
 
 REM 4. Aguardar um pouco e iniciar Frontend

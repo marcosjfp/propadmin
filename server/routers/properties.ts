@@ -79,9 +79,9 @@ export const propertiesRouter = router({
       if (search) {
         whereConditions.push(
           or(
-            sql`${propertiesSchema.title} LIKE ${`%${search}%`}`,
-            sql`${propertiesSchema.address} LIKE ${`%${search}%`}`,
-            sql`${propertiesSchema.description} LIKE ${`%${search}%`}`
+            sql`${propertiesSchema.title} ILIKE ${`%${search}%`}`,
+            sql`${propertiesSchema.address} ILIKE ${`%${search}%`}`,
+            sql`${propertiesSchema.description} ILIKE ${`%${search}%`}`
           )
         );
       }

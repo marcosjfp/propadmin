@@ -123,7 +123,7 @@ export const usersRouter = router({
         .limit(pageSize)
         .offset(offset);
         
-      // Conta o total (MySQL requer query separada)
+      // Conta o total
       const [countResult] = await ctx.db
         .select({ count: sql`count(*)` })
         .from(users);

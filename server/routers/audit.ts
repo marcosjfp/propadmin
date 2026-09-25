@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure, adminProcedure } from '../trpc.js';
 import { auditLogs } from '../../drizzle/schema.js';
-import { eq, desc, and, gte, lte, or, like, sql } from 'drizzle-orm';
+import { eq, desc, and, gte, lte, or, ilike, sql } from 'drizzle-orm';
 import type { Context } from '../context.js';
 
 // Tipos de ação para tipagem
@@ -106,9 +106,9 @@ export const auditRouter = router({
       if (input?.search) {
         conditions.push(
           or(
-            like(auditLogs.description, `%${input.search}%`),
-            like(auditLogs.entityName, `%${input.search}%`),
-            like(auditLogs.userName, `%${input.search}%`)
+            ilike(auditLogs.description, `%${input.search}%`),
+            ilike(auditLogs.entityName, `%${input.search}%`),
+            ilike(auditLogs.userName, `%${input.search}%`)
           )
         );
       }
