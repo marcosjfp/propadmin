@@ -15,7 +15,7 @@ const checkCSRF = t.middleware(({ ctx, type, next }) => {
       ?.headers?.origin;
     const clientUrl = process.env.CLIENT_URL;
     
-    if (clientUrl && origin !== clientUrl) {
+    if (!clientUrl || origin !== new URL(clientUrl).origin) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid origin (CSRF protection)' });
     }
   }
@@ -69,6 +69,6 @@ const isAdmin = t.middleware(({ ctx, next }) => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(isAuthenticated);
-export const agentProcedure = t.procedure.use(isAgent);
-export const adminProcedure = t.procedure.use(isAdmin);
+export const protectedProcedure = publicProcedure.use(isAuthenticated);
+export const agentProcedure = publicProcedure.use(isAgent);
+export const adminProcedure = publicProcedure.use(isAdmin);

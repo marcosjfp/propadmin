@@ -48,7 +48,7 @@ export function createJWT(user: { id: number; email?: string | null; role: strin
 // Função para verificar token JWT
 export function verifyJWT(token: string): JWTPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+    return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload;
   } catch (error) {
     return null;
   }
@@ -73,7 +73,7 @@ export async function createContext({ req, res }: trpcExpress.CreateExpressConte
           .where(eq(users.id, decoded.id))
           .limit(1);
         
-        if (dbUser) {
+        if (dbUser?.status === 'active' && !dbUser.deletedAt) {
           user = {
             id: dbUser.id,
             openId: dbUser.openId,

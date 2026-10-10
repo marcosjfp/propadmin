@@ -1,14 +1,11 @@
+import { idSchema, defaultCommissionRates } from '../../shared/validation.js';
 import { z } from 'zod';
-import { router, protectedProcedure, agentProcedure, adminProcedure } from '../trpc.js';
+import { router, agentProcedure, adminProcedure } from '../trpc.js';
 import { commissions, properties, users } from '../../drizzle/schema.js';
 import { eq, desc, and, or } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
+import type { Context } from '../context.js';
 import { TRPCError } from '@trpc/server';
-
-const DEFAULT_COMMISSION_RATE = {
-  venda: 800,
-  aluguel: 1000,
-} as const;
 
 function resolveCommissionRate(inputRate: number | undefined, customRate: number | null, transactionType: 'venda' | 'aluguel') {
   if (inputRate !== undefined) {
@@ -17,7 +14,86 @@ function resolveCommissionRate(inputRate: number | undefined, customRate: number
   if (customRate !== null) {
     return customRate;
   }
-  return DEFAULT_COMMISSION_RATE[transactionType];
+  return defaultCommissionRates[transactionType];
+}
+
+// All commission writers lock the property before validating its current state.
+// The lock serializes create/registerTransaction requests for the same property.
+async function recordTransaction(ctx: Context & { user: NonNullable<Context["user"]> }, input: {
+  propertyId: number;
+  transactionAmount: number;
+  transactionType?: 'venda' | 'aluguel';
+  commissionRate?: number;
+}) {
+  return ctx.db.transaction(async (tx) => {
+    const [property] = await tx.select().from(properties)
+      .where(eq(properties.id, input.propertyId)).limit(1).for('update');
+    if (!property || property.deletedAt) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
+    }
+    if (ctx.user.role !== 'admin' && property.agentId !== ctx.user.id && property.assignedAgentId !== ctx.user.id) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para registrar transação deste imóvel' });
+    }
+    if (!property.isApproved || property.status !== 'ativa') {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas imóveis ativos e aprovados podem gerar comissão' });
+    }
+    if (input.transactionType && property.transactionType !== input.transactionType) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Tipo de transação inválido para este imóvel' });
+    }
+    if (input.commissionRate !== undefined && ctx.user.role !== 'admin') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas administradores podem definir taxa manual na transação' });
+    }
+    const [existing] = await tx.select({ id: commissions.id }).from(commissions)
+      .where(and(eq(commissions.propertyId, property.id), or(eq(commissions.status, 'pendente'), eq(commissions.status, 'paga')))).limit(1);
+    if (existing) {
+      throw new TRPCError({ code: 'CONFLICT', message: 'Este imóvel já possui uma comissão registrada' });
+    }
+    const commissionRate = resolveCommissionRate(input.commissionRate, property.customCommissionRate, property.transactionType);
+    const commissionAmount = Math.round(input.transactionAmount * commissionRate / 10000);
+    const beneficiaryId = property.assignedAgentId ?? property.agentId;
+    const [beneficiary] = await tx.select().from(users).where(eq(users.id,beneficiaryId)).for('share');
+    if (!beneficiary || beneficiary.deletedAt || beneficiary.status!=='active' || !['agent','admin'].includes(beneficiary.role)) {
+      throw new TRPCError({code:'BAD_REQUEST',message:'Atribua o imóvel a um corretor ativo antes de registrar a transação'});
+    }
+    const [commission] = await tx.insert(commissions).values({
+      propertyId: property.id,
+      agentId: beneficiaryId,
+      transactionType: property.transactionType,
+      transactionAmount: input.transactionAmount,
+      commissionRate,
+      commissionAmount,
+      status: 'pendente',
+    }).returning();
+    const newStatus = property.transactionType === 'venda' ? 'vendida' : 'alugada';
+    {
+      await tx.update(properties).set({ status: newStatus, updatedAt: new Date() }).where(eq(properties.id, property.id));
+    }
+    return { property, commission, commissionRate, commissionAmount, newStatus };
+  });
+}
+
+async function changeCommission(ctx: Context, input: {id:number;status:'pendente'|'paga'|'cancelada';paymentDate?:Date}) {
+  return ctx.db.transaction(async tx => {
+    const [lookup] = await tx.select().from(commissions).where(eq(commissions.id,input.id));
+    if (!lookup) throw new TRPCError({code:'NOT_FOUND',message:'Comissão não encontrada'});
+    const [property] = await tx.select().from(properties).where(eq(properties.id,lookup.propertyId)).for('update');
+    const [current] = await tx.select().from(commissions).where(eq(commissions.id,input.id)).for('update');
+    if (current.status === input.status) return {success:true};
+    if (current.status === 'paga' || current.status === 'cancelada') {
+      throw new TRPCError({code:'CONFLICT',message:'Comissões pagas ou canceladas são registros finais e não podem ser alteradas'});
+    }
+    if (input.status === 'paga' && input.paymentDate && input.paymentDate > new Date()) {
+      throw new TRPCError({code:'BAD_REQUEST',message:'Data do pagamento não pode estar no futuro'});
+    }
+    const paymentDate = input.status === 'paga' ? input.paymentDate ?? new Date() : null;
+    await tx.update(commissions).set({status:input.status,paymentDate}).where(eq(commissions.id,input.id));
+    // Cancellation reopens the approved property unless it was archived.
+    if (input.status === 'cancelada' && property && !property.deletedAt && property.isApproved) {
+      await tx.update(properties).set({status:'ativa'}).where(eq(properties.id,property.id));
+    }
+    await createAuditLog({ctx:{...ctx,db:tx as typeof ctx.db},action:input.status==='paga'?'commission_paid':input.status==='cancelada'?'commission_cancelled':'commission_status_changed',entityType:'commission',entityId:current.id,entityName:property?.title ?? `Comissão #${current.id}`,previousValue:{status:current.status},newValue:{status:input.status,paymentDate},description:`Comissão #${current.id}: ${current.status} → ${input.status}; histórico preservado`});
+    return {success:true};
+  });
 }
 
 export const commissionsRouter = router({
@@ -37,7 +113,7 @@ export const commissionsRouter = router({
         createdAt: commissions.createdAt,
         updatedAt: commissions.updatedAt,
         property: properties,
-        agent: users,
+        agent: { id: users.id, name: users.name, email: users.email, creci: users.creci },
       })
       .from(commissions)
       .leftJoin(properties, eq(commissions.propertyId, properties.id))
@@ -71,8 +147,8 @@ export const commissionsRouter = router({
   }),
 
   // Get a single commission by ID (verifica permissão)
-  getById: protectedProcedure
-    .input(z.object({ id: z.number() }))
+  getById: agentProcedure
+    .input(z.object({ id: idSchema }))
     .query(async ({ ctx, input }) => {
       const [commission] = await ctx.db
         .select()
@@ -96,89 +172,15 @@ export const commissionsRouter = router({
   create: agentProcedure
     .input(
       z.object({
-        propertyId: z.number(),
+        propertyId: idSchema,
         transactionType: z.enum(['venda', 'aluguel']),
         transactionAmount: z.number().int().min(1000, 'Valor mínimo: R$ 10,00').max(100000000000, 'Valor máximo excedido'), // Min R$10, Max R$1B
         commissionRate: z.number().int().min(0).max(10000).optional(), // Se não fornecido, usa o da propriedade ou padrão
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Buscar propriedade + validar permissão
-      const [property] = await ctx.db
-        .select()
-        .from(properties)
-        .where(eq(properties.id, input.propertyId))
-        .limit(1);
+      const { property, commission, commissionRate, commissionAmount } = await recordTransaction(ctx, { propertyId: input.propertyId, transactionAmount: input.transactionAmount, transactionType: input.transactionType, commissionRate: input.commissionRate });
 
-      if (!property) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
-      }
-
-      const canManageProperty =
-        ctx.user.role === 'admin' ||
-        property.agentId === ctx.user.id ||
-        property.assignedAgentId === ctx.user.id;
-
-      if (!canManageProperty) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não tem permissão para registrar transação deste imóvel' });
-      }
-
-      if (!property.isApproved || property.status !== 'ativa') {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas imóveis ativos e aprovados podem gerar comissão' });
-      }
-
-      if (property.transactionType !== input.transactionType) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Tipo de transação inválido para este imóvel' });
-      }
-
-      if (input.commissionRate !== undefined && ctx.user.role !== 'admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas administradores podem definir taxa manual na transação' });
-      }
-
-      const [existingCommission] = await ctx.db
-        .select({ id: commissions.id })
-        .from(commissions)
-        .where(
-          and(
-            eq(commissions.propertyId, input.propertyId),
-            or(eq(commissions.status, 'pendente'), eq(commissions.status, 'paga'))
-          )
-        )
-        .limit(1);
-
-      if (existingCommission) {
-        throw new TRPCError({ code: 'CONFLICT', message: 'Este imóvel já possui uma comissão registrada' });
-      }
-
-      const commissionRate = resolveCommissionRate(
-        input.commissionRate,
-        property.customCommissionRate,
-        input.transactionType
-      );
-
-      // Calculate commission amount
-      const commissionAmount = Math.floor((input.transactionAmount * commissionRate) / 10000);
-
-      await ctx.db
-        .insert(commissions)
-        .values({
-          propertyId: input.propertyId,
-          agentId: ctx.user.id,
-          transactionType: input.transactionType,
-          transactionAmount: input.transactionAmount,
-          commissionRate,
-          commissionAmount,
-          status: 'pendente',
-        });
-      
-      // Buscar a comissão recém-criada
-      const [commission] = await ctx.db
-        .select()
-        .from(commissions)
-        .where(eq(commissions.agentId, ctx.user.id))
-        .orderBy(desc(commissions.id))
-        .limit(1);
-      
       // Registrar no histórico
       await createAuditLog({
         ctx,
@@ -202,78 +204,12 @@ export const commissionsRouter = router({
   registerTransaction: agentProcedure
     .input(
       z.object({
-        propertyId: z.number(),
+        propertyId: idSchema,
         transactionAmount: z.number().int().min(1000, 'Valor minimo: R$ 10,00').max(100000000000, 'Valor maximo excedido'),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [property] = await ctx.db
-        .select()
-        .from(properties)
-        .where(eq(properties.id, input.propertyId))
-        .limit(1);
-
-      if (!property) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade nao encontrada' });
-      }
-
-      const canManageProperty =
-        ctx.user.role === 'admin' ||
-        property.agentId === ctx.user.id ||
-        property.assignedAgentId === ctx.user.id;
-
-      if (!canManageProperty) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissao para registrar transacao deste imovel' });
-      }
-
-      if (!property.isApproved || property.status !== 'ativa') {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas imoveis ativos e aprovados podem ser finalizados' });
-      }
-
-      const [existingCommission] = await ctx.db
-        .select({ id: commissions.id })
-        .from(commissions)
-        .where(
-          and(
-            eq(commissions.propertyId, input.propertyId),
-            or(eq(commissions.status, 'pendente'), eq(commissions.status, 'paga'))
-          )
-        )
-        .limit(1);
-
-      if (existingCommission) {
-        throw new TRPCError({ code: 'CONFLICT', message: 'Este imovel ja possui uma comissao registrada' });
-      }
-
-      const commissionRate = resolveCommissionRate(undefined, property.customCommissionRate, property.transactionType);
-      const commissionAmount = Math.floor((input.transactionAmount * commissionRate) / 10000);
-      const newStatus = property.transactionType === 'venda' ? 'vendida' : 'alugada';
-
-      await ctx.db.transaction(async (tx) => {
-        await tx
-          .insert(commissions)
-          .values({
-            propertyId: property.id,
-            agentId: ctx.user.id,
-            transactionType: property.transactionType,
-            transactionAmount: input.transactionAmount,
-            commissionRate,
-            commissionAmount,
-            status: 'pendente',
-          });
-
-        await tx
-          .update(properties)
-          .set({ status: newStatus })
-          .where(eq(properties.id, property.id));
-      });
-
-      const [commission] = await ctx.db
-        .select()
-        .from(commissions)
-        .where(eq(commissions.propertyId, property.id))
-        .orderBy(desc(commissions.id))
-        .limit(1);
+      const { property, commission, commissionRate, commissionAmount, newStatus } = await recordTransaction(ctx, { propertyId: input.propertyId, transactionAmount: input.transactionAmount });
 
       await createAuditLog({
         ctx,
@@ -315,85 +251,15 @@ export const commissionsRouter = router({
   updateStatus: adminProcedure
     .input(
       z.object({
-        id: z.number(),
+        id: idSchema,
         status: z.enum(['pendente', 'paga', 'cancelada']),
         paymentDate: z.date().optional(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      const { id, ...updateData } = input;
-      
-      // Buscar comissão atual para log
-      const [currentCommission] = await ctx.db
-        .select({
-          commission: commissions,
-          property: properties,
-        })
-        .from(commissions)
-        .leftJoin(properties, eq(commissions.propertyId, properties.id))
-        .where(eq(commissions.id, id))
-        .limit(1);
-      
-      await ctx.db
-        .update(commissions)
-        .set(updateData)
-        .where(eq(commissions.id, id));
-
-      // Registrar no histórico
-      if (currentCommission) {
-        const actionMap: Record<string, any> = {
-          'paga': 'commission_paid',
-          'cancelada': 'commission_cancelled',
-        };
-        const action = actionMap[input.status] || 'commission_status_changed';
-        
-        await createAuditLog({
-          ctx,
-          action,
-          entityType: 'commission',
-          entityId: id,
-          entityName: currentCommission.property?.title || `Comissão #${id}`,
-          previousValue: { status: currentCommission.commission.status },
-          newValue: { status: input.status, paymentDate: input.paymentDate },
-          description: `Status da comissão do imóvel "${currentCommission.property?.title}" alterado de "${currentCommission.commission.status}" para "${input.status}"`,
-        });
-      }
-
-      return { success: true };
-    }),
+    .mutation(async ({ctx,input}) => changeCommission(ctx,input)),
 
   // Delete a commission (admin only)
   delete: adminProcedure
-    .input(z.object({ id: z.number() }))
-    .mutation(async ({ ctx, input }) => {
-      // Buscar comissão atual para log
-      const [currentCommission] = await ctx.db
-        .select({
-          commission: commissions,
-          property: properties,
-        })
-        .from(commissions)
-        .leftJoin(properties, eq(commissions.propertyId, properties.id))
-        .where(eq(commissions.id, input.id))
-        .limit(1);
-
-      await ctx.db
-        .delete(commissions)
-        .where(eq(commissions.id, input.id));
-
-      // Registrar no histórico
-      if (currentCommission) {
-        await createAuditLog({
-          ctx,
-          action: 'commission_cancelled',
-          entityType: 'commission',
-          entityId: input.id,
-          entityName: currentCommission.property?.title || `Comissão #${input.id}`,
-          previousValue: currentCommission.commission,
-          description: `Comissão #${input.id} do imóvel "${currentCommission.property?.title || 'N/A'}" foi excluída`,
-        });
-      }
-
-      return { success: true };
-    }),
+    .input(z.object({ id: idSchema }))
+    .mutation(async ({ctx,input}) => changeCommission(ctx,{id:input.id,status:'cancelada'})),
 });

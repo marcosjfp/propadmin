@@ -23,6 +23,7 @@ interface PropertyImage {
   id: number;
   propertyId: number;
   url: string;
+  thumbnailUrl?: string;
   filename: string;
   originalName: string;
   mimeType: string;
@@ -46,7 +47,8 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
   const imagesQuery = trpc.images.listByProperty.useQuery({ propertyId }, {
     enabled: propertyId > 0,
   });
-  const createMutation = trpc.images.create.useMutation();
+  const prepareMutation = trpc.images.prepareUpload.useMutation();
+  const completeMutation = trpc.images.completeUpload.useMutation();
   const deleteMutation = trpc.images.delete.useMutation();
   const setPrimaryMutation = trpc.images.setPrimary.useMutation();
 
@@ -102,19 +104,13 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
         }
 
         try {
-          // Converter para base64
-          const base64 = await fileToBase64(file);
-          const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.${file.name.split('.').pop()}`;
-
-          await createMutation.mutateAsync({
-            propertyId,
-            base64Data: base64,
-            filename,
-            originalName: file.name,
-            mimeType: file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-            size: file.size,
-            isPrimary: images.length === 0 && i === 0, // Primeira imagem é principal
+          const upload = await prepareMutation.mutateAsync({
+            propertyId, originalName:file.name, size:file.size,
+            mimeType:file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
           });
+          const response=await fetch(upload.uploadUrl,{method:'PUT',headers:{'Content-Type':file.type},body:file});
+          if (!response.ok) throw new Error('Falha ao enviar imagem');
+          await completeMutation.mutateAsync({token:upload.token,isPrimary:images.length===0 && i===0});
           successCount++;
         } catch (error: any) {
           console.error(`Erro ao enviar ${file.name}:`, error);
@@ -126,8 +122,8 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
 
       if (successCount > 0) {
         toast.success(`${successCount} imagem(ns) enviada(s) com sucesso!`);
-        await imagesQuery.refetch();
-        onImagesChange?.(imagesQuery.data || []);
+        const updated = await imagesQuery.refetch();
+        onImagesChange?.(updated.data || []);
       }
       
       if (errorCount > 0 && successCount === 0) {
@@ -143,14 +139,14 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
         fileInputRef.current.value = '';
       }
     }
-  }, [propertyId, images.length, createMutation, imagesQuery, onImagesChange]);
+  }, [propertyId, images.length, prepareMutation, completeMutation, imagesQuery, onImagesChange]);
 
   const handleDelete = async (imageId: number) => {
     try {
       await deleteMutation.mutateAsync({ imageId });
       toast.success('Imagem excluída');
-      await imagesQuery.refetch();
-      onImagesChange?.(imagesQuery.data || []);
+      const updated = await imagesQuery.refetch();
+      onImagesChange?.(updated.data || []);
     } catch (error: any) {
       toast.error('Erro ao excluir: ' + (error?.message || 'Erro desconhecido'));
     }
@@ -160,20 +156,11 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
     try {
       await setPrimaryMutation.mutateAsync({ imageId });
       toast.success('Imagem principal definida');
-      await imagesQuery.refetch();
-      onImagesChange?.(imagesQuery.data || []);
+      const updated = await imagesQuery.refetch();
+      onImagesChange?.(updated.data || []);
     } catch (error: any) {
       toast.error('Erro: ' + (error?.message || 'Erro desconhecido'));
     }
-  };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = (error) => reject(error);
-    });
   };
 
   const formatFileSize = (bytes: number) => {
@@ -251,7 +238,7 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
                   onClick={() => setPreviewImage(image.url)}
                 >
                   <img
-                    src={image.url}
+                    src={image.thumbnailUrl || image.url}
                     alt={image.originalName}
                     className="w-full h-full object-cover"
                     loading="lazy"
@@ -288,7 +275,7 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
                           e.stopPropagation();
                           handleSetPrimary(image.id);
                         }}
-                        disabled={setPrimaryMutation.isPending}
+                        disabled={setPrimaryMutation.isLoading}
                         title="Definir como principal"
                       >
                         <Star className="h-3.5 w-3.5 text-blue-600" />
@@ -302,7 +289,7 @@ export default function ImageUpload({ propertyId, onImagesChange }: ImageUploadP
                         e.stopPropagation();
                         handleDelete(image.id);
                       }}
-                      disabled={deleteMutation.isPending}
+                      disabled={deleteMutation.isLoading}
                       title="Excluir imagem"
                     >
                       <X className="h-3.5 w-3.5 text-red-600" />
@@ -415,7 +402,7 @@ export function PropertyImageGallery({ propertyId }: { propertyId: number }) {
               onClick={() => setSelectedImage(image.url)}
             >
               <img
-                src={image.url}
+                src={image.thumbnailUrl || image.url}
                 alt={image.originalName}
                 className="w-full h-full object-cover hover:scale-105 transition-transform"
                 loading="lazy"

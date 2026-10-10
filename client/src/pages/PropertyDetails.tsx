@@ -1,3 +1,4 @@
+import { defaultCommissionRates } from '@shared/validation';
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -92,7 +93,7 @@ export default function PropertyDetails() {
     if (property?.customCommissionRate !== null && property?.customCommissionRate !== undefined) {
       return property.customCommissionRate;
     }
-    return property?.transactionType === "venda" ? 800 : 1000;
+    return defaultCommissionRates[property?.transactionType || "venda"];
   };
 
   const handleConfirmTransaction = async () => {
@@ -546,9 +547,9 @@ export default function PropertyDetails() {
             <Button
               className="w-full bg-green-600 hover:bg-green-700"
               onClick={handleConfirmTransaction}
-              disabled={registerTransactionMutation.isPending}
+              disabled={registerTransactionMutation.isLoading}
             >
-              {registerTransactionMutation.isPending
+              {registerTransactionMutation.isLoading
                 ? "Processando..."
                 : `Confirmar ${property.transactionType === "venda" ? "Venda" : "Aluguel"}`}
             </Button>

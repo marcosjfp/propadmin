@@ -1,3 +1,4 @@
+import { defaultCommissionRates } from '@shared/validation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,7 @@ export function PropertyCommissionDialog({
   onSave,
   isPending
 }: PropertyCommissionDialogProps) {
+  const defaultRate = defaultCommissionRates[selectedProperty?.transactionType || 'venda'] / 100;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -33,13 +35,14 @@ export function PropertyCommissionDialog({
           <DialogTitle>Taxa de Comissão Customizada</DialogTitle>
           <DialogDescription>
             Defina uma taxa de comissão específica para "{selectedProperty?.title}".
-            Deixe em branco para usar a taxa padrão do sistema (6%).
+            Deixe em branco para usar a taxa padrão do sistema ({defaultRate}%).
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label>Taxa (%)</Label>
+            <Label htmlFor="custom-commission-rate">Taxa (%)</Label>
             <Input
+              id="custom-commission-rate"
               type="number"
               step="0.01"
               min="0"
@@ -49,7 +52,7 @@ export function PropertyCommissionDialog({
               placeholder="Ex: 5"
             />
             <p className="text-sm text-gray-500">
-              Valor atual: {selectedProperty?.customCommissionRate ? `${selectedProperty.customCommissionRate / 100}%` : 'Padrão (6%)'}
+              Valor atual: {selectedProperty?.customCommissionRate != null ? `${selectedProperty.customCommissionRate / 100}%` : `Padrão (${defaultRate}%)`}
             </p>
           </div>
         </div>

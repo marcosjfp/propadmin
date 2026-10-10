@@ -1,4 +1,4 @@
-import { boolean, bigint, integer, pgEnum, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { boolean, bigint, integer, pgEnum, pgTable, serial, text, timestamp, varchar, index } from "drizzle-orm/pg-core";
 
 const userStatus = pgEnum("user_status", ["active", "pending", "rejected"]);
 const userRole = pgEnum("user_role", ["user", "agent", "admin"]);
@@ -31,7 +31,8 @@ export const users = pgTable("users", {
   role: userRole("role").default("user").notNull(),
   creci: varchar("creci", { length: 50 }), // Número CRECI para agentes imobiliários
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
@@ -58,16 +59,17 @@ export const properties = pgTable("properties", {
   city: varchar("city", { length: 100 }).notNull(),
   state: varchar("state", { length: 2 }).notNull(),
   zipCode: varchar("zipCode", { length: 10 }),
-  agentId: integer("agentId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  agentId: integer("agentId").notNull().references(() => users.id, { onDelete: "restrict" }),
   assignedAgentId: integer("assignedAgentId").references(() => users.id, { onDelete: "set null" }),
   customCommissionRate: integer("customCommissionRate"),
   status: propertyStatus("status").default("pendente").notNull(),
   isApproved: boolean("isApproved").default(false).notNull(), // Se o imóvel foi aprovado pelo admin
   approvedBy: integer("approvedBy").references(() => users.id, { onDelete: "set null" }),
   approvedAt: timestamp("approvedAt"), // Data de aprovação
+  deletedAt: timestamp("deletedAt"),
   rejectionReason: text("rejectionReason"), // Motivo da rejeição, se aplicável
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
 export type Property = typeof properties.$inferSelect;
@@ -78,8 +80,8 @@ export type InsertProperty = typeof properties.$inferInsert;
  */
 export const commissions = pgTable("commissions", {
   id: serial("id").primaryKey(),
-  propertyId: integer("propertyId").notNull().references(() => properties.id, { onDelete: "cascade" }),
-  agentId: integer("agentId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  propertyId: integer("propertyId").notNull().references(() => properties.id, { onDelete: "restrict" }),
+  agentId: integer("agentId").notNull().references(() => users.id, { onDelete: "restrict" }),
   transactionType: transactionType("transactionType").notNull(),
   transactionAmount: bigint("transactionAmount", { mode: "number" }).notNull(), // Valor da transação em centavos
   commissionRate: integer("commissionRate").notNull(),
@@ -87,7 +89,7 @@ export const commissions = pgTable("commissions", {
   status: commissionStatus("status").default("pendente").notNull(),
   paymentDate: timestamp("paymentDate"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
 export type Commission = typeof commissions.$inferSelect;
@@ -99,6 +101,8 @@ export type InsertCommission = typeof commissions.$inferInsert;
 export const propertyImages = pgTable("property_images", {
   id: serial("id").primaryKey(),
   propertyId: integer("propertyId").notNull().references(() => properties.id, { onDelete: "cascade" }),
+  storageKey: text("storageKey").unique(),
+  thumbnailKey: text("thumbnailKey"),
   url: text("url").notNull(), // URL ou caminho do arquivo
   filename: varchar("filename", { length: 255 }).notNull(),
   originalName: varchar("originalName", { length: 255 }).notNull(),
@@ -146,3 +150,10 @@ export const auditLogs = pgTable("audit_logs", {
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
 
+
+// Shared counters across server processes and serverless instances.
+export const rateLimits = pgTable("rate_limits", {
+  key: varchar("key", {length:128}).primaryKey(),
+  hits: integer("hits").notNull(),
+  expiresAt: timestamp("expiresAt", {withTimezone:true}).notNull(),
+}, table => [index("rate_limits_expiry_idx").on(table.expiresAt)]);

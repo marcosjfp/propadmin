@@ -1,10 +1,16 @@
 import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure, adminProcedure } from '../trpc.js';
 import { users } from '../../drizzle/schema.js';
-import { eq, desc, sql, or } from 'drizzle-orm';
+import { eq, desc, sql, or, and, getTableColumns, isNull } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
 import { TRPCError } from '@trpc/server';
+import { changeAccount } from '../accounts.js';
+import { idSchema, passwordSchema } from '../../shared/validation.js';
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+
+// Never serialize password hashes into API responses.
+const { passwordHash: _passwordHash, ...userFields } = getTableColumns(users);
 
 export const usersRouter = router({
   // Get current logged-in user
@@ -16,10 +22,10 @@ export const usersRouter = router({
   updateProfile: protectedProcedure
     .input(
       z.object({
-        name: z.string().optional(),
-        email: z.string().email().optional(),
-        phone: z.string().optional(),
-        creci: z.string().optional(),
+        name: z.string().trim().min(2).max(100).optional(),
+        email: z.string().max(320).email().optional(),
+        phone: z.string().max(20).optional(),
+        creci: z.string().max(50).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -32,7 +38,7 @@ export const usersRouter = router({
       if (input.creci !== undefined && (ctx.user.role === 'agent' || ctx.user.role === 'admin')) {
         updateData.creci = input.creci;
       }
-      
+
       if (Object.keys(updateData).length > 0) {
         await ctx.db
           .update(users)
@@ -46,22 +52,17 @@ export const usersRouter = router({
   // List pending users (admin only)
   listPending: adminProcedure.query(async ({ ctx }) => {
     return await ctx.db
-      .select()
+      .select(userFields)
       .from(users)
-      .where(eq(users.status, 'pending'))
+      .where(and(eq(users.status, 'pending'),isNull(users.deletedAt)))
       .orderBy(desc(users.createdAt));
   }),
 
   // Approve a user (admin only)
   approve: adminProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: idSchema }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db
-        .update(users)
-        .set({ status: 'active' })
-        .where(eq(users.id, input.id));
-
-      const [user] = await ctx.db.select().from(users).where(eq(users.id, input.id)).limit(1);
+      const user = await changeAccount(ctx, input.id, {status:'active'});
 
       if (user) {
         await createAuditLog({
@@ -70,7 +71,7 @@ export const usersRouter = router({
           entityType: 'user',
           entityId: input.id,
           entityName: user.name || user.email || `User #${input.id}`,
-          previousValue: { status: 'pending' },
+          previousValue: { status: user.status },
           newValue: { status: 'active' },
           description: `Usuário "${user.name || user.email}" aprovado`,
         });
@@ -81,14 +82,9 @@ export const usersRouter = router({
 
   // Reject a user (admin only)
   reject: adminProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: idSchema }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.db
-        .update(users)
-        .set({ status: 'rejected' })
-        .where(eq(users.id, input.id));
-
-      const [user] = await ctx.db.select().from(users).where(eq(users.id, input.id)).limit(1);
+      const user = await changeAccount(ctx, input.id, {status:'rejected'});
 
       if (user) {
         await createAuditLog({
@@ -97,7 +93,7 @@ export const usersRouter = router({
           entityType: 'user',
           entityId: input.id,
           entityName: user.name || user.email || `User #${input.id}`,
-          previousValue: { status: 'pending' },
+          previousValue: { status: user.status },
           newValue: { status: 'rejected' },
           description: `Usuário "${user.name || user.email}" rejeitado`,
         });
@@ -108,26 +104,27 @@ export const usersRouter = router({
 
   // List all users with pagination (admin only)
   list: adminProcedure
-    .input(z.object({ 
-      page: z.number().min(1).default(1), 
-      pageSize: z.number().min(1).max(100).default(20) 
+    .input(z.object({
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(1).max(100).default(20)
     }).optional().default({ page: 1, pageSize: 20 }))
     .query(async ({ ctx, input }) => {
       const { page, pageSize } = input;
       const offset = (page - 1) * pageSize;
 
       const items = await ctx.db
-        .select()
+        .select(userFields)
         .from(users)
+        .where(isNull(users.deletedAt))
         .orderBy(desc(users.createdAt))
         .limit(pageSize)
         .offset(offset);
-        
+
       // Conta o total
       const [countResult] = await ctx.db
         .select({ count: sql`count(*)` })
-        .from(users);
-        
+        .from(users).where(isNull(users.deletedAt));
+
       return {
         items,
         totalCount: Number(countResult.count),
@@ -139,13 +136,14 @@ export const usersRouter = router({
 
   // Get a single user by ID (admin only)
   getById: adminProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: idSchema }))
     .query(async ({ ctx, input }) => {
       const [user] = await ctx.db
-        .select()
+        .select(userFields)
         .from(users)
-        .where(eq(users.id, input.id))
+        .where(and(eq(users.id, input.id),isNull(users.deletedAt)))
         .limit(1);
+      if (!user) throw new TRPCError({code:'NOT_FOUND',message:'Usuário não encontrado'});
       return user;
     }),
 
@@ -153,23 +151,23 @@ export const usersRouter = router({
   create: adminProcedure
     .input(
       z.object({
-        openId: z.string().min(1),
+        openId: z.string().min(1).max(64),
         name: z.string().trim().min(2).max(100).optional(),
-        email: z.string().email().toLowerCase().optional(),
-        phone: z.string().regex(/^[\d\s\-()]+$/).optional(),
-        loginMethod: z.string().optional(),
+        email: z.string().max(320).email().toLowerCase().optional(),
+        phone: z.string().max(20).regex(/^[\d\s\-()]+$/).optional(),
+        loginMethod: z.string().max(64).optional(),
         role: z.enum(['user', 'agent', 'admin']).default('user'),
-        creci: z.string().optional(),
+        creci: z.string().max(50).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       // Verificar se já existe usuário com mesmo openId
       const [existing] = await ctx.db
-        .select()
+        .select(userFields)
         .from(users)
         .where(eq(users.openId, input.openId))
         .limit(1);
-      
+
       if (existing) {
         throw new TRPCError({ code: 'CONFLICT', message: 'Usuário já existe com este identificador' });
       }
@@ -177,11 +175,11 @@ export const usersRouter = router({
       // Verificar email duplicado
       if (input.email) {
         const [emailExists] = await ctx.db
-          .select()
+          .select(userFields)
           .from(users)
           .where(eq(users.email, input.email))
           .limit(1);
-        
+
         if (emailExists) {
           throw new TRPCError({ code: 'CONFLICT', message: 'Email já está em uso' });
         }
@@ -198,10 +196,10 @@ export const usersRouter = router({
           role: input.role,
           creci: input.creci,
         });
-      
+
       // Buscar o usuário recém-criado pelo openId
       const [user] = await ctx.db
-        .select()
+        .select(userFields)
         .from(users)
         .where(eq(users.openId, input.openId))
         .limit(1);
@@ -216,7 +214,7 @@ export const usersRouter = router({
         newValue: { role: input.role },
         description: `Usuário "${user.name || user.email}" criado pelo administrador`,
       });
-      
+
       return { id: user.id };
     }),
 
@@ -224,25 +222,15 @@ export const usersRouter = router({
   updateRole: adminProcedure
     .input(
       z.object({
-        id: z.number(),
+        id: idSchema,
         role: z.enum(['user', 'agent', 'admin']),
-        creci: z.string().optional(),
+        creci: z.string().max(50).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
-      
-      // Buscar usuário atual para log
-      const [currentUser] = await ctx.db
-        .select()
-        .from(users)
-        .where(eq(users.id, id))
-        .limit(1);
-      
-      await ctx.db
-        .update(users)
-        .set(updateData)
-        .where(eq(users.id, id));
+
+      const currentUser = await changeAccount(ctx, id, updateData);
 
       // Registrar no histórico
       if (currentUser) {
@@ -263,27 +251,9 @@ export const usersRouter = router({
 
   // Delete a user (admin only)
   delete: adminProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: idSchema }))
     .mutation(async ({ ctx, input }) => {
-      // Impedir admin de deletar a si mesmo
-      if (input.id === ctx.user.id) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não pode deletar sua própria conta' });
-      }
-
-      // Buscar usuário antes de deletar para log
-      const [userToDelete] = await ctx.db
-        .select()
-        .from(users)
-        .where(eq(users.id, input.id))
-        .limit(1);
-
-      if (!userToDelete) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Usuário não encontrado' });
-      }
-      
-      await ctx.db
-        .delete(users)
-        .where(eq(users.id, input.id));
+      const userToDelete = await changeAccount(ctx, input.id, {status:'rejected',deletedAt:new Date()});
 
       // Registrar no histórico
       await createAuditLog({
@@ -293,7 +263,7 @@ export const usersRouter = router({
         entityId: input.id,
         entityName: userToDelete.name || userToDelete.email || `User #${input.id}`,
         previousValue: userToDelete,
-        description: `Usuário "${userToDelete.name || userToDelete.email}" excluído`,
+        description: `Usuário "${userToDelete.name || userToDelete.email}" desativado`,
       });
 
       return { success: true };
@@ -303,33 +273,18 @@ export const usersRouter = router({
   update: adminProcedure
     .input(
       z.object({
-        id: z.number(),
-        name: z.string().optional(),
-        email: z.string().email().optional(),
-        phone: z.string().optional(),
+        id: idSchema,
+        name: z.string().trim().min(2).max(100).optional(),
+        email: z.string().max(320).email().optional(),
+        phone: z.string().max(20).optional(),
         role: z.enum(['user', 'agent', 'admin']).optional(),
-        creci: z.string().optional(),
+        creci: z.string().max(50).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
-      
-      // Buscar usuário atual para log
-      const [currentUser] = await ctx.db
-        .select()
-        .from(users)
-        .where(eq(users.id, id))
-        .limit(1);
-      
-      // Se mudar para user, limpar CRECI
-      if (updateData.role === 'user') {
-        updateData.creci = undefined;
-      }
-      
-      await ctx.db
-        .update(users)
-        .set(updateData)
-        .where(eq(users.id, id));
+
+      const currentUser = await changeAccount(ctx, id, updateData);
 
       // Registrar no histórico
       if (currentUser) {
@@ -342,7 +297,7 @@ export const usersRouter = router({
           entityName: currentUser.name || currentUser.email || `User #${id}`,
           previousValue: currentUser,
           newValue: updateData,
-          description: roleChanged 
+          description: roleChanged
             ? `Papel do usuário "${currentUser.name || currentUser.email}" alterado de "${currentUser.role}" para "${updateData.role}"`
             : `Usuário "${currentUser.name || currentUser.email}" atualizado`,
         });
@@ -355,7 +310,7 @@ export const usersRouter = router({
   promoteToAgent: adminProcedure
     .input(
       z.object({
-        id: z.number(),
+        id: idSchema,
         // Validação CRECI: formato CRECI-XX-NNNNNN ou variações comuns
         creci: z.string()
           .min(3, "CRECI deve ter pelo menos 3 caracteres")
@@ -369,21 +324,8 @@ export const usersRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Normalizar CRECI para formato padrão
       const normalizedCreci = input.creci.toUpperCase().replace(/\s/g, '');
-      
-      // Buscar usuário atual para log
-      const [currentUser] = await ctx.db
-        .select()
-        .from(users)
-        .where(eq(users.id, input.id))
-        .limit(1);
-      
-      await ctx.db
-        .update(users)
-        .set({
-          role: 'agent',
-          creci: normalizedCreci,
-        })
-        .where(eq(users.id, input.id));
+
+      const currentUser = await changeAccount(ctx, input.id, {role:'agent',creci:normalizedCreci});
 
       // Registrar no histórico
       if (currentUser) {
@@ -412,7 +354,7 @@ export const usersRouter = router({
         createdAt: users.createdAt,
       })
       .from(users)
-      .where(or(eq(users.role, 'agent'), eq(users.role, 'admin')))
+      .where(and(eq(users.status, 'active'), isNull(users.deletedAt), or(eq(users.role, 'agent'), eq(users.role, 'admin'))))
       .orderBy(desc(users.createdAt));
     return result;
   }),
@@ -421,22 +363,18 @@ export const usersRouter = router({
   createAgent: adminProcedure
     .input(
       z.object({
-        name: z.string().min(1, "Nome é obrigatório"),
-        email: z.string().email("Email inválido"),
-        phone: z.string().optional(),
-        creci: z.string().min(1, "CRECI é obrigatório para corretores"),
-        username: z.string().min(3, "Usuário deve ter pelo menos 3 caracteres"),
-        password: z.string()
-          .min(8, 'Senha deve ter pelo menos 8 caracteres')
-          .regex(/[A-Z]/, 'Senha deve conter pelo menos uma letra maiúscula')
-          .regex(/[0-9]/, 'Senha deve conter pelo menos um número')
-          .regex(/[^A-Za-z0-9]/, 'Senha deve conter pelo menos um caractere especial'),
+        name: z.string().trim().min(1, "Nome é obrigatório").max(100),
+        email: z.string().max(320).email("Email inválido").toLowerCase(),
+        phone: z.string().max(20).optional(),
+        creci: z.string().trim().min(1, "CRECI é obrigatório para corretores").max(50),
+        username: z.string().min(3, "Usuário deve ter pelo menos 3 caracteres").max(64),
+        password: passwordSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
       // Verificar se o email já existe
       const [existingUser] = await ctx.db
-        .select()
+        .select(userFields)
         .from(users)
         .where(eq(users.email, input.email))
         .limit(1);
@@ -447,7 +385,7 @@ export const usersRouter = router({
 
       // Verificar se o username já existe
       const [existingUsername] = await ctx.db
-        .select()
+        .select(userFields)
         .from(users)
         .where(eq(users.username, input.username))
         .limit(1);
@@ -457,7 +395,7 @@ export const usersRouter = router({
       }
 
       const passwordHash = await bcrypt.hash(input.password, 10);
-      const openId = `local-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const openId = `local-${randomUUID()}`;
 
       await ctx.db
         .insert(users)
@@ -476,7 +414,7 @@ export const usersRouter = router({
 
       // Buscar o usuário criado
       const [newUser] = await ctx.db
-        .select()
+        .select(userFields)
         .from(users)
         .where(eq(users.openId, openId))
         .limit(1);

@@ -19,6 +19,7 @@ import { Plus, ArrowLeft, ImageIcon } from "lucide-react";
 
 export default function Properties() {
   const { user, loading: authLoading } = useAuth();
+  const [showFilters, setShowFilters] = useState(false);
   const [open, setOpen] = useState(false);
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
@@ -53,7 +54,9 @@ export default function Properties() {
     status: "ativa" as "pendente" | "ativa" | "vendida" | "alugada" | "inativa" | "rejeitada",
   });
 
-  const { filters, updateFilter, clearFilters, hasActiveFilters, queryParams } = usePropertyFilters();
+  const { filters, updateFilter: changeFilter, clearFilters: resetFilters, hasActiveFilters, queryParams } = usePropertyFilters();
+  const updateFilter: typeof changeFilter = (key,value) => {setPage(1);changeFilter(key,value);};
+  const clearFilters = () => {setPage(1);resetFilters();};
   const [page, setPage] = useState(1);
   const pageSize = 12;
 
@@ -75,7 +78,7 @@ export default function Properties() {
   const isAdmin = user?.role === "admin";
 
   // Query para listar agentes (para admin atribuir)
-  const agentsQuery = trpc.users.list.useQuery(undefined, {
+  const agentsQuery = trpc.users.listAgents.useQuery(undefined, {
     enabled: isAdmin
   });
 
@@ -172,7 +175,7 @@ export default function Properties() {
         await updateMutation.mutateAsync({
           id: editingId,
           ...propertyData,
-          status: formData.status,
+          status: user?.role === "admin" ? formData.status : undefined,
         });
         systemToast.propertyUpdated(formData.title);
       } else {
@@ -192,17 +195,17 @@ export default function Properties() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm("Tem certeza que deseja deletar esta propriedade?")) {
+    if (confirm("Arquivar este imóvel? O histórico financeiro será preservado.")) {
       setDeletingPropertyId(id);
       try {
         const data = propertiesQuery.data;
         const items = data && 'items' in data ? data.items : (Array.isArray(data) ? data : undefined);
         const property = items?.find((p: any) => p.id === id);
         await deleteMutation.mutateAsync({ id });
-        systemToast.deleted(property?.title || "Propriedade", "Imóvel");
+        systemToast.success(`Imóvel "${property?.title || "Propriedade"}" arquivado`);
         propertiesQuery.refetch();
       } catch (error: any) {
-        systemToast.error(error?.message || "Falha ao deletar propriedade");
+        systemToast.error(error?.message || "Falha ao arquivar imóvel");
       } finally {
         setDeletingPropertyId(null);
       }
@@ -229,7 +232,7 @@ export default function Properties() {
 
   const handleOpenCommissionDialog = (property: RouterOutput["properties"]["listAll"]["items"][0]) => {
     setSelectedProperty(property);
-    setCustomCommissionRate(property.customCommissionRate ? (property.customCommissionRate / 100).toString() : "");
+    setCustomCommissionRate(property.customCommissionRate != null ? (property.customCommissionRate / 100).toString() : "");
     setCommissionDialogOpen(true);
   };
 
@@ -324,14 +327,14 @@ export default function Properties() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
-          <Link href="/admin">
-            <Button variant="outline" size="icon">
+          <Link href={isAdmin ? "/admin" : "/"}>
+            <Button variant="outline" size="icon" aria-label="Voltar">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight">Gerenciar Propriedades</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Gerenciar Propriedades</h1>
         </div>
         {(user?.role === "agent" || user?.role === "admin") && (
           <Button onClick={() => { resetForm(); setOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
@@ -343,8 +346,8 @@ export default function Properties() {
 
       <div className="space-y-6">
         <PropertyFilters
-          showFilters={true}
-          setShowFilters={() => {}}
+          showFilters={showFilters}
+          setShowFilters={setShowFilters}
           filters={filters}
           updateFilter={updateFilter}
           clearFilters={clearFilters}
@@ -372,8 +375,8 @@ export default function Properties() {
                   onImage={handleOpenImageDialog}
                   onCommission={handleOpenCommissionDialog}
                   onSell={handleOpenSellDialog}
-                  isDeleting={deleteMutation.isPending && deletingPropertyId === property.id}
-                  isApproving={approveMutation.isPending && approvingPropertyId === property.id}
+                  isDeleting={deleteMutation.isLoading && deletingPropertyId === property.id}
+                  isApproving={approveMutation.isLoading && approvingPropertyId === property.id}
                 />
               ))}
             </div>
@@ -424,7 +427,7 @@ export default function Properties() {
         formData={formData}
         setFormData={setFormData}
         onSubmit={handleSubmit}
-        isPending={createMutation.isPending || updateMutation.isPending}
+        isPending={createMutation.isLoading || updateMutation.isLoading}
         isAdmin={isAdmin}
       />
 
@@ -435,7 +438,7 @@ export default function Properties() {
         customCommissionRate={customCommissionRate}
         setCustomCommissionRate={setCustomCommissionRate}
         onSave={handleSetCustomCommission}
-        isPending={setCustomCommissionMutation.isPending}
+        isPending={setCustomCommissionMutation.isLoading}
       />
 
       <RejectPropertyDialog
@@ -443,18 +446,18 @@ export default function Properties() {
         onOpenChange={setRejectDialogOpen}
         property={selectedProperty}
         onReject={handleConfirmReject}
-        isPending={rejectMutation.isPending}
+        isPending={rejectMutation.isLoading}
       />
 
       <AssignAgentDialog
         open={assignDialogOpen}
         onOpenChange={setAssignDialogOpen}
         property={selectedProperty}
-        agents={agentsQuery.data?.items || []}
+        agents={agentsQuery.data || []}
         selectedAgentId={selectedAgentId}
         onAgentChange={setSelectedAgentId}
         onAssign={handleAssignAgent}
-        isPending={assignAgentMutation.isPending}
+        isPending={assignAgentMutation.isLoading}
       />
 
       <SellPropertyDialog
@@ -464,7 +467,7 @@ export default function Properties() {
         transactionAmount={transactionAmount}
         setTransactionAmount={setTransactionAmount}
         onConfirm={handleConfirmTransaction}
-        isPending={registerTransactionMutation.isPending}
+        isPending={registerTransactionMutation.isLoading}
         formatPrice={formatPrice}
       />
 

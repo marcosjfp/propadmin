@@ -1,4 +1,4 @@
-name: Deploy
+name: Verify release
 
 on:
   push:
@@ -10,6 +10,26 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: propadmin
+          POSTGRES_PASSWORD: integration-only
+          POSTGRES_DB: propadmin_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U propadmin -d propadmin_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://propadmin:integration-only@127.0.0.1:5432/propadmin_ci
+      JWT_SECRET: ci-only-token-secret-not-for-production-123456
+      NODE_ENV: test
+      LOCAL_ADMIN_PASSWORD: IntegrationFixture1!
+      RUN_DATABASE_TESTS: '1'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -17,12 +37,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 11.1.3
 
       - name: Get pnpm store directory
         shell: bash
@@ -30,7 +50,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -38,12 +58,22 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Type check
-        run: pnpm type-check || true
+        run: pnpm type-check
 
       - name: Build
         run: pnpm build
 
+      - name: Lint
+        run: pnpm --dir client lint
 
+      - name: Migrate and seed isolated test database
+        run: node --import tsx scripts/seed-local-admin.ts
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=moderate
+
+      - name: Regression tests
+        run: pnpm test

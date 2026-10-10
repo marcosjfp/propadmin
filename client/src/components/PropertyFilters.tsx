@@ -1,10 +1,10 @@
 import { Input } from "@/components/ui/input";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Search, Filter, X } from "lucide-react";
@@ -34,8 +34,9 @@ export function PropertyFilters({
           <label className="text-sm font-medium text-gray-700 mb-1 block">Buscar</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input 
-              placeholder="Digite cidade, bairro, ID ou termo..." 
+            <Input
+              aria-label="Buscar imóveis"
+              placeholder="Digite cidade, endereço, ID ou termo..."
               value={filters.search}
               onChange={(e) => updateFilter("search", e.target.value)}
               className="pl-9 w-full"
@@ -43,27 +44,30 @@ export function PropertyFilters({
           </div>
         </div>
         <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
-          <Button 
-            variant={showFilters ? "secondary" : "outline"} 
+          <Button
+            variant={showFilters ? "secondary" : "outline"}
+            aria-label="Filtros"
+            aria-expanded={showFilters}
             onClick={() => setShowFilters(!showFilters)}
             className="flex-1 md:flex-none whitespace-nowrap"
           >
             <Filter className="h-4 w-4 mr-2" />
             <span className="hidden sm:inline">
-              Filtros {Object.values(filters).filter(v => v !== "" && v !== "all").length > 0 && 
+              Filtros {Object.values(filters).filter(v => v !== "" && v !== "all").length > 0 &&
                 `(${Object.values(filters).filter(v => v !== "" && v !== "all").length})`}
             </span>
             <span className="sm:hidden">
-               {Object.values(filters).filter(v => v !== "" && v !== "all").length > 0 && 
+               {Object.values(filters).filter(v => v !== "" && v !== "all").length > 0 &&
                 `(${Object.values(filters).filter(v => v !== "" && v !== "all").length})`}
             </span>
           </Button>
           {(Object.values(filters).some(v => v !== "" && v !== "all")) && (
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={clearFilters}
               className="px-2"
               title="Limpar todos os filtros"
+              aria-label="Limpar todos os filtros"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -76,7 +80,7 @@ export function PropertyFilters({
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Tipo de Negócio</label>
             <Select value={filters.transactionType} onValueChange={(v) => updateFilter("transactionType", v)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 w-full" aria-label="Tipo de Negócio">
                 <SelectValue placeholder="Venda ou Aluguel" />
               </SelectTrigger>
               <SelectContent>
@@ -86,11 +90,11 @@ export function PropertyFilters({
               </SelectContent>
             </Select>
           </div>
-          
+
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Tipo de Imóvel</label>
             <Select value={filters.type} onValueChange={(v) => updateFilter("type", v)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 w-full" aria-label="Tipo de Imóvel">
                 <SelectValue placeholder="Casa, Apto..." />
               </SelectTrigger>
               <SelectContent>
@@ -99,6 +103,7 @@ export function PropertyFilters({
                 <SelectItem value="casa">Casa</SelectItem>
                 <SelectItem value="terreno">Terreno</SelectItem>
                 <SelectItem value="comercial">Comercial</SelectItem>
+                <SelectItem value="outro">Outro</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -106,7 +111,7 @@ export function PropertyFilters({
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Cidade</label>
             <Select value={filters.city || "all"} onValueChange={(v) => updateFilter("city", v)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 w-full" aria-label="Cidade">
                 <SelectValue placeholder="Qualquer cidade" />
               </SelectTrigger>
               <SelectContent>
@@ -121,7 +126,7 @@ export function PropertyFilters({
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Status</label>
             <Select value={filters.status} onValueChange={(v) => updateFilter("status", v)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 w-full" aria-label="Status">
                 <SelectValue placeholder="Qualquer status" />
               </SelectTrigger>
               <SelectContent>
@@ -130,15 +135,19 @@ export function PropertyFilters({
                 <SelectItem value="vendida">Vendida</SelectItem>
                 <SelectItem value="alugada">Alugada</SelectItem>
                 <SelectItem value="inativa">Inativa</SelectItem>
+                <SelectItem value="pendente">Pendente</SelectItem>
+                <SelectItem value="rejeitada">Rejeitada</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Preço Mínimo (R$)</label>
-            <Input 
-              type="number" 
-              placeholder="Ex: 100000" 
+            <Input
+              type="number"
+              aria-label="Preço Mínimo (R$)"
+              min="0"
+              placeholder="Ex: 100000"
               value={filters.minPrice}
               onChange={(e) => updateFilter("minPrice", e.target.value)}
               className="h-9"
@@ -147,9 +156,11 @@ export function PropertyFilters({
 
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Preço Máximo (R$)</label>
-            <Input 
-              type="number" 
-              placeholder="Ex: 500000" 
+            <Input
+              type="number"
+              aria-label="Preço Máximo (R$)"
+              min="0"
+              placeholder="Ex: 500000"
               value={filters.maxPrice}
               onChange={(e) => updateFilter("maxPrice", e.target.value)}
               className="h-9"
@@ -159,7 +170,7 @@ export function PropertyFilters({
           <div>
             <label className="text-xs font-medium text-gray-500 mb-1 block">Quartos (Mínimo)</label>
             <Select value={filters.minRooms || "all"} onValueChange={(v) => updateFilter("minRooms", v === "all" ? "" : v)}>
-              <SelectTrigger className="h-9">
+              <SelectTrigger className="h-9 w-full" aria-label="Quartos (Mínimo)">
                 <SelectValue placeholder="Indiferente" />
               </SelectTrigger>
               <SelectContent>

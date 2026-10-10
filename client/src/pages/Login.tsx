@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { APP_TITLE } from "@/const";
-import { Link, useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { Home as HomeIcon, LogIn } from "lucide-react";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -21,8 +21,7 @@ export default function Login() {
 
   // If already authenticated, redirect to home
   if (!loading && isAuthenticated) {
-    setLocation("/");
-    return null;
+    return <Redirect to="/" />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,7 +69,7 @@ export default function Login() {
                   placeholder="Seu nome de usuário"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  disabled={loginMutation.isPending}
+                  disabled={loginMutation.isLoading}
                 />
               </div>
               <div className="space-y-2">
@@ -81,15 +80,15 @@ export default function Login() {
                   placeholder="••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={loginMutation.isPending}
+                  disabled={loginMutation.isLoading}
                 />
               </div>
               <Button 
                 type="submit" 
                 className="w-full bg-blue-600 hover:bg-blue-700"
-                disabled={loginMutation.isPending}
+                disabled={loginMutation.isLoading}
               >
-                {loginMutation.isPending ? "Entrando..." : (
+                {loginMutation.isLoading ? "Entrando..." : (
                   <>
                     <LogIn className="h-4 w-4 mr-2" />
                     Entrar

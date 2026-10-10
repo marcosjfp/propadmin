@@ -1,5 +1,6 @@
+import { idSchema, dateFilterSchema, auditActions } from '../../shared/validation.js';
 import { z } from 'zod';
-import { router, protectedProcedure, adminProcedure } from '../trpc.js';
+import { router, adminProcedure } from '../trpc.js';
 import { auditLogs } from '../../drizzle/schema.js';
 import { eq, desc, and, gte, lte, or, ilike, sql } from 'drizzle-orm';
 import type { Context } from '../context.js';
@@ -45,8 +46,8 @@ export async function createAuditLog({
       entityType,
       entityId: entityId || null,
       entityName: entityName || null,
-      previousValue: previousValue ? JSON.stringify(previousValue) : null,
-      newValue: newValue ? JSON.stringify(newValue) : null,
+      previousValue: previousValue ? JSON.stringify(previousValue, (key, value) => /password|token|secret/i.test(key) ? undefined : value) : null,
+      newValue: newValue ? JSON.stringify(newValue, (key, value) => /password|token|secret/i.test(key) ? undefined : value) : null,
       description,
       ipAddress: ctx.ip ? String(ctx.ip).substring(0, 45) : null,
       userAgent: ctx.userAgent || null,
@@ -61,15 +62,15 @@ export const auditRouter = router({
   // Listar todos os logs (apenas admin)
   list: adminProcedure
     .input(z.object({
-      page: z.number().min(1).default(1),
-      limit: z.number().min(1).max(100).default(50),
+      page: z.number().int().min(1).default(1),
+      limit: z.number().int().min(1).max(100).default(50),
       entityType: z.enum(["user", "property", "commission", "image"]).optional(),
-      entityId: z.number().optional(),
-      userId: z.number().optional(),
-      action: z.string().optional(),
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
-      search: z.string().optional(),
+      entityId: idSchema.optional(),
+      userId: idSchema.optional(),
+      action: z.enum(auditActions).optional(),
+      startDate: dateFilterSchema.optional(),
+      endDate: dateFilterSchema.optional(),
+      search: z.string().max(200).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const page = input?.page || 1;
@@ -92,7 +93,7 @@ export const auditRouter = router({
       }
 
       if (input?.action) {
-        conditions.push(eq(auditLogs.action, input.action as any));
+        conditions.push(eq(auditLogs.action, input.action));
       }
 
       if (input?.startDate) {
@@ -100,7 +101,7 @@ export const auditRouter = router({
       }
 
       if (input?.endDate) {
-        conditions.push(lte(auditLogs.createdAt, new Date(input.endDate)));
+        conditions.push(lte(auditLogs.createdAt, new Date(input.endDate.length === 10 ? `${input.endDate}T23:59:59.999Z` : input.endDate)));
       }
 
       if (input?.search) {
@@ -126,7 +127,7 @@ export const auditRouter = router({
 
       // Contar total
       const [countResult] = await ctx.db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`count(*)::int` })
         .from(auditLogs)
         .where(whereClause);
 
@@ -144,10 +145,10 @@ export const auditRouter = router({
     }),
 
   // Histórico de uma entidade específica
-  getEntityHistory: protectedProcedure
+  getEntityHistory: adminProcedure
     .input(z.object({
       entityType: z.enum(["user", "property", "commission", "image"]),
-      entityId: z.number(),
+      entityId: idSchema,
     }))
     .query(async ({ ctx, input }) => {
       const logs = await ctx.db
@@ -168,8 +169,8 @@ export const auditRouter = router({
   // Histórico de ações de um usuário
   getUserActivity: adminProcedure
     .input(z.object({
-      userId: z.number(),
-      limit: z.number().min(1).max(100).default(50),
+      userId: idSchema,
+      limit: z.number().int().min(1).max(100).default(50),
     }))
     .query(async ({ ctx, input }) => {
       const logs = await ctx.db
@@ -185,8 +186,8 @@ export const auditRouter = router({
   // Estatísticas de auditoria
   getStats: adminProcedure
     .input(z.object({
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
+      startDate: dateFilterSchema.optional(),
+      endDate: dateFilterSchema.optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const conditions = [];
@@ -195,7 +196,7 @@ export const auditRouter = router({
         conditions.push(gte(auditLogs.createdAt, new Date(input.startDate)));
       }
       if (input?.endDate) {
-        conditions.push(lte(auditLogs.createdAt, new Date(input.endDate)));
+        conditions.push(lte(auditLogs.createdAt, new Date(input.endDate.length === 10 ? `${input.endDate}T23:59:59.999Z` : input.endDate)));
       }
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -204,7 +205,7 @@ export const auditRouter = router({
       const byEntityType = await ctx.db
         .select({
           entityType: auditLogs.entityType,
-          count: sql<number>`count(*)`,
+          count: sql<number>`count(*)::int`,
         })
         .from(auditLogs)
         .where(whereClause)
@@ -214,7 +215,7 @@ export const auditRouter = router({
       const byAction = await ctx.db
         .select({
           action: auditLogs.action,
-          count: sql<number>`count(*)`,
+          count: sql<number>`count(*)::int`,
         })
         .from(auditLogs)
         .where(whereClause)
@@ -227,7 +228,7 @@ export const auditRouter = router({
         .select({
           userId: auditLogs.userId,
           userName: auditLogs.userName,
-          count: sql<number>`count(*)`,
+          count: sql<number>`count(*)::int`,
         })
         .from(auditLogs)
         .where(whereClause)
@@ -237,7 +238,7 @@ export const auditRouter = router({
 
       // Total de logs
       const [totalResult] = await ctx.db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`count(*)::int` })
         .from(auditLogs)
         .where(whereClause);
 
@@ -252,7 +253,7 @@ export const auditRouter = router({
   // Ações recentes (dashboard)
   getRecent: adminProcedure
     .input(z.object({
-      limit: z.number().min(1).max(50).default(20),
+      limit: z.number().int().min(1).max(50).default(20),
     }).optional())
     .query(async ({ ctx, input }) => {
       const logs = await ctx.db

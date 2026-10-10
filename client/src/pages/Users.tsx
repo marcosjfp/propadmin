@@ -92,10 +92,10 @@ export default function Users() {
     
     try {
       await deleteMutation.mutateAsync({ id: userToDelete.id });
-      toast.success("Usuário deletado com sucesso");
+      toast.success("Usuário desativado com sucesso");
       usersQuery.refetch();
     } catch (error: any) {
-      toast.error(error?.message || "Falha ao deletar usuário");
+      toast.error(error?.message || "Falha ao desativar usuário");
     } finally {
       setDeleteDialogOpen(false);
       setUserToDelete(null);
@@ -233,9 +233,9 @@ export default function Users() {
                                   <Button
                                     className="w-full bg-blue-600 hover:bg-blue-700"
                                     onClick={() => handlePromoteToAgent(u.id)}
-                                    disabled={promoteMutation.isPending}
+                                    disabled={promoteMutation.isLoading}
                                   >
-                                    {promoteMutation.isPending ? "Promovendo..." : "Promover"}
+                                    {promoteMutation.isLoading ? "Promovendo..." : "Promover"}
                                   </Button>
                                 </div>
                               </DialogContent>
@@ -246,8 +246,8 @@ export default function Users() {
                             size="sm"
                             className="h-8"
                             onClick={() => openDeleteDialog(u.id, u.name || "este usuário")}
-                            disabled={deleteMutation.isPending}
-                            aria-label={`Deletar usuário ${u.name || "sem nome"}`}
+                            disabled={deleteMutation.isLoading}
+                            aria-label={`Desativar usuário ${u.name || "sem nome"}`}
                           >
                             <Trash2 className="h-4 w-4 text-red-600" />
                           </Button>
@@ -367,7 +367,7 @@ export default function Users() {
                             variant="default" 
                             className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none"
                             onClick={() => handleApprove(u.id)}
-                            disabled={approveMutation.isPending || rejectMutation.isPending}
+                            disabled={approveMutation.isLoading || rejectMutation.isLoading}
                           >
                             <CheckCircle className="h-4 w-4 mr-2" /> Aprovar
                           </Button>
@@ -375,7 +375,7 @@ export default function Users() {
                             variant="destructive" 
                             className="flex-1 sm:flex-none"
                             onClick={() => handleReject(u.id)}
-                            disabled={approveMutation.isPending || rejectMutation.isPending}
+                            disabled={approveMutation.isLoading || rejectMutation.isLoading}
                           >
                             <XCircle className="h-4 w-4 mr-2" /> Rejeitar
                           </Button>
@@ -402,7 +402,7 @@ export default function Users() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja deletar {userToDelete?.name}? Esta ação não pode ser desfeita.
+              Tem certeza que deseja desativar {userToDelete?.name}? O acesso será desativado. Imóveis e histórico financeiro serão preservados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -411,7 +411,7 @@ export default function Users() {
               onClick={handleDelete}
               className="bg-red-600 hover:bg-red-700"
             >
-              {deleteMutation.isPending ? "Deletando..." : "Deletar"}
+              {deleteMutation.isLoading ? "Desativando..." : "Desativar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

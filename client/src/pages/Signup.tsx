@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { APP_TITLE } from "@/const";
-import { Link, useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { Home as HomeIcon, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -31,8 +31,7 @@ export default function Signup() {
 
   // If already authenticated, redirect to home
   if (!loading && isAuthenticated) {
-    setLocation("/");
-    return null;
+    return <Redirect to="/" />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,7 +78,7 @@ export default function Signup() {
                   placeholder="Seu nome"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  disabled={signupMutation.isPending}
+                  disabled={signupMutation.isLoading}
                 />
               </div>
 
@@ -91,7 +90,7 @@ export default function Signup() {
                   placeholder="exemplo@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  disabled={signupMutation.isPending}
+                  disabled={signupMutation.isLoading}
                 />
               </div>
 
@@ -103,7 +102,7 @@ export default function Signup() {
                     placeholder="Seu usuário"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    disabled={signupMutation.isPending}
+                    disabled={signupMutation.isLoading}
                   />
                 </div>
                 <div className="space-y-2">
@@ -114,14 +113,14 @@ export default function Signup() {
                     placeholder="••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    disabled={signupMutation.isPending}
+                    disabled={signupMutation.isLoading}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="role">Tipo de Conta</Label>
-                <Select value={role} onValueChange={setRole} disabled={signupMutation.isPending}>
+                <Select value={role} onValueChange={setRole} disabled={signupMutation.isLoading}>
                   <SelectTrigger id="role" className="w-full">
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
@@ -135,9 +134,9 @@ export default function Signup() {
               <Button 
                 type="submit" 
                 className="w-full bg-blue-600 hover:bg-blue-700 mt-2"
-                disabled={signupMutation.isPending}
+                disabled={signupMutation.isLoading}
               >
-                {signupMutation.isPending ? "Cadastrando..." : (
+                {signupMutation.isLoading ? "Cadastrando..." : (
                   <>
                     <UserPlus className="h-4 w-4 mr-2" />
                     Cadastrar

@@ -1,3 +1,4 @@
+import { dashboardRouter } from './dashboard.js';
 import { router } from '../trpc.js';
 import { authRouter } from './auth.js';
 import { usersRouter } from './users.js';
@@ -7,6 +8,7 @@ import { imagesRouter } from './images.js';
 import { auditRouter } from './audit.js';
 
 export const appRouter = router({
+  dashboard: dashboardRouter,
   auth: authRouter,
   users: usersRouter,
   properties: propertiesRouter,

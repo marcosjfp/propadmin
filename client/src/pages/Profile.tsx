@@ -134,8 +134,8 @@ export default function Profile() {
                 )}
 
                 <div className="flex gap-2">
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={updateProfileMutation.isPending}>
-                    {updateProfileMutation.isPending ? "Salvando..." : "Salvar"}
+                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={updateProfileMutation.isLoading}>
+                    {updateProfileMutation.isLoading ? "Salvando..." : "Salvar"}
                   </Button>
                   <Button
                     type="button"

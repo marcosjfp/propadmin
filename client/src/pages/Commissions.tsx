@@ -148,7 +148,7 @@ export default function Commissions() {
                     {user?.role === "admin" && (
                       <div>
                         <p className="text-sm text-gray-600">Ação</p>
-                        <Select value={commission.status} onValueChange={(value) => handleStatusChange(commission.id, value)}>
+                        <Select disabled={commission.status!=="pendente"} value={commission.status} onValueChange={(value) => handleStatusChange(commission.id, value)}>
                           <SelectTrigger className="mt-1">
                             <SelectValue />
                           </SelectTrigger>

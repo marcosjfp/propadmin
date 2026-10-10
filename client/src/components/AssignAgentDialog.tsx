@@ -19,7 +19,7 @@ import { UserPlus } from "lucide-react";
 import { RouterOutput } from "@/lib/trpc";
 
 type Property = RouterOutput["properties"]["listAll"]["items"][0];
-type User = RouterOutput["users"]["list"]["items"][0];
+type User = RouterOutput["users"]["listAgents"][0];
 
 interface AssignAgentDialogProps {
   open: boolean;
@@ -73,17 +73,16 @@ export function AssignAgentDialog({
               <SelectContent>
                 <SelectItem value="none">Nenhum (remover atribuição)</SelectItem>
                 {agents
-                  ?.filter((agent: any) => agent.role === "agent" || agent.role === "admin")
-                  .map((agent: any) => (
+                  ?.map((agent) => (
                     <SelectItem key={agent.id} value={agent.id.toString()}>
-                      {agent.name || agent.email || `Usuário #${agent.id}`}
+                      {agent.name || `Usuário #${agent.id}`}
                       {agent.creci && ` (CRECI: ${agent.creci})`}
                     </SelectItem>
                   ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-gray-500">
-              O corretor atribuído terá acesso exclusivo a este imóvel para gerenciar comissões.
+              O corretor atribuído terá acesso a este imóvel e receberá a comissão registrada.
             </p>
           </div>
 

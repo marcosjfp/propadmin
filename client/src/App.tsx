@@ -1,21 +1,22 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
+const NotFound = lazy(() => import("./pages/NotFound"));
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import Properties from "./pages/Properties";
-import Users from "./pages/Users";
-import Commissions from "./pages/Commissions";
-import MyCommissions from "./pages/MyCommissions";
-import Profile from "./pages/Profile";
-import AdminDashboard from "./pages/AdminDashboard";
-import AgentDashboard from "./pages/AgentDashboard";
-import PropertyDetails from "./pages/PropertyDetails";
-import AuditHistory from "./pages/AuditHistory";
+const Home = lazy(() => import("./pages/Home"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const Properties = lazy(() => import("./pages/Properties"));
+const Users = lazy(() => import("./pages/Users"));
+const Commissions = lazy(() => import("./pages/Commissions"));
+const MyCommissions = lazy(() => import("./pages/MyCommissions"));
+const Profile = lazy(() => import("./pages/Profile"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AgentDashboard = lazy(() => import("./pages/AgentDashboard"));
+const PropertyDetails = lazy(() => import("./pages/PropertyDetails"));
+const AuditHistory = lazy(() => import("./pages/AuditHistory"));
 
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -89,7 +90,9 @@ function App() {
       >
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center" role="status">Carregando...</div>}>
+            <Router />
+          </Suspense>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

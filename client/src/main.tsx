@@ -1,5 +1,4 @@
 import { trpc } from "@/lib/trpc";
-import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -14,7 +13,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
+  const isUnauthorized = error.data?.code === "UNAUTHORIZED";
 
   if (!isUnauthorized) return;
 
@@ -30,8 +29,10 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
+    if (event.query.queryKey[0]?.toString() !== "auth,me") {
+      redirectToLoginIfUnauthorized(error);
+      console.error("[API Query Error]", error);
+    }
   }
 });
 
@@ -44,7 +45,7 @@ queryClient.getMutationCache().subscribe(event => {
 });
 
 // Use relative URL in production, localhost in development
-const apiUrl = import.meta.env.PROD ? '/api/trpc' : 'http://localhost:3000/api/trpc';
+const apiUrl = '/api/trpc';
 
 const trpcClient = trpc.createClient({
   transformer: superjson,

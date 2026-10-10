@@ -1,7 +1,8 @@
+import { idSchema, propertyStatuses, propertyTypes, transactionTypes } from '../../shared/validation.js';
 import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure, agentProcedure, adminProcedure } from '../trpc.js';
 import { users, properties as propertiesSchema } from '../../drizzle/schema.js';
-import { eq, and, desc, or, sql } from 'drizzle-orm';
+import { eq, and, desc, or, sql, isNull } from 'drizzle-orm';
 import { createAuditLog } from './audit.js';
 import { alias } from 'drizzle-orm/pg-core';
 import { TRPCError } from '@trpc/server';
@@ -48,7 +49,7 @@ export const propertiesRouter = router({
       })
       .from(propertiesSchema)
       .leftJoin(users, eq(propertiesSchema.agentId, users.id))
-      .where(and(eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)))
+      .where(and(isNull(propertiesSchema.deletedAt), eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)))
       .orderBy(desc(propertiesSchema.createdAt));
     return result;
   }),
@@ -56,32 +57,34 @@ export const propertiesRouter = router({
   // List properties with pagination (protected)
   // Admins see all. Agents see active + their own. Users see only active.
   listAll: protectedProcedure
-    .input(z.object({ 
-      page: z.number().min(1).default(1), 
-      pageSize: z.number().min(1).max(100).default(20),
-      search: z.string().optional(),
-      status: z.string().optional(),
-      type: z.string().optional(),
-      transactionType: z.string().optional(),
-      city: z.string().optional(),
-      minPrice: z.number().optional(),
-      maxPrice: z.number().optional(),
-      minRooms: z.number().optional(),
+    .input(z.object({
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(1).max(100).default(20),
+      search: z.string().max(200).optional(),
+      status: z.enum([...propertyStatuses, 'todos', 'all']).optional(),
+      type: z.enum([...propertyTypes, 'todos', 'all']).optional(),
+      transactionType: z.enum([...transactionTypes, 'todos', 'all']).optional(),
+      city: z.string().max(100).optional(),
+      minPrice: z.number().nonnegative().max(1000000000).optional(),
+      maxPrice: z.number().nonnegative().max(1000000000).optional(),
+      minRooms: z.number().int().nonnegative().max(1000).optional(),
     }).optional().default({ page: 1, pageSize: 20 }))
     .query(async ({ ctx, input }) => {
-      const { 
-        page, pageSize, search, status, type, transactionType, 
-        city, minPrice, maxPrice, minRooms 
+      const {
+        page, pageSize, search, status, type, transactionType,
+        city, minPrice, maxPrice, minRooms
       } = input;
       const offset = (page - 1) * pageSize;
 
-      const whereConditions = [];
+      const whereConditions: ReturnType<typeof or>[] = [isNull(propertiesSchema.deletedAt)];
       if (search) {
         whereConditions.push(
           or(
             sql`${propertiesSchema.title} ILIKE ${`%${search}%`}`,
             sql`${propertiesSchema.address} ILIKE ${`%${search}%`}`,
-            sql`${propertiesSchema.description} ILIKE ${`%${search}%`}`
+            sql`${propertiesSchema.description} ILIKE ${`%${search}%`}`,
+            sql`${propertiesSchema.city} ILIKE ${`%${search}%`}`,
+            sql`${propertiesSchema.id}::text = ${search}`
           )
         );
       }
@@ -114,7 +117,7 @@ export const propertiesRouter = router({
         // Agents see active properties OR their own properties
         roleFilters.push(
           or(
-            and(eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)),
+            and(isNull(propertiesSchema.deletedAt), eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)),
             eq(propertiesSchema.agentId, ctx.user.id),
             eq(propertiesSchema.assignedAgentId, ctx.user.id)
           )
@@ -122,10 +125,10 @@ export const propertiesRouter = router({
       } else {
         // Regular users only see active & approved properties
         roleFilters.push(
-          and(eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true))
+          and(isNull(propertiesSchema.deletedAt), eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true))
         );
       }
-      
+
       const allConditions = [...whereConditions, ...roleFilters];
       const finalWhere = allConditions.length > 0 ? and(...allConditions) : undefined;
 
@@ -176,6 +179,7 @@ export const propertiesRouter = router({
       .leftJoin(users, eq(propertiesSchema.agentId, users.id))
       .where(
         and(
+          isNull(propertiesSchema.deletedAt),
           eq(propertiesSchema.status, 'pendente'),
           eq(propertiesSchema.isApproved, false)
         )
@@ -193,10 +197,10 @@ export const propertiesRouter = router({
       })
       .from(propertiesSchema)
       .where(
-        or(
+        and(isNull(propertiesSchema.deletedAt), or(
           eq(propertiesSchema.agentId, ctx.user.id),
           eq(propertiesSchema.assignedAgentId, ctx.user.id)
-        )
+        ))
       )
       .orderBy(desc(propertiesSchema.createdAt));
     return result;
@@ -204,7 +208,7 @@ export const propertiesRouter = router({
 
   // Get a single property by ID
   getById: publicProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: idSchema }))
     .query(async ({ ctx, input }) => {
       const [property] = await ctx.db
         .select({
@@ -217,7 +221,7 @@ export const propertiesRouter = router({
         .from(propertiesSchema)
         .leftJoin(users, eq(propertiesSchema.agentId, users.id))
         .leftJoin(assignedAgent, eq(propertiesSchema.assignedAgentId, assignedAgent.id))
-        .where(eq(propertiesSchema.id, input.id))
+        .where(and(eq(propertiesSchema.id, input.id),isNull(propertiesSchema.deletedAt)))
         .limit(1);
 
       if (!property) {
@@ -243,28 +247,28 @@ export const propertiesRouter = router({
   create: agentProcedure
     .input(
       z.object({
-        title: z.string().min(1),
-        description: z.string().optional(),
+        title: z.string().trim().min(1).max(255),
+        description: z.string().max(10000).optional(),
         type: z.enum(['apartamento', 'casa', 'terreno', 'comercial', 'outro']),
         transactionType: z.enum(['venda', 'aluguel']),
-        price: z.number().int().positive(),
-        size: z.number().int().positive(),
-        rooms: z.number().int().min(0),
-        bathrooms: z.number().int().min(0),
+        price: z.number().int().positive().max(100000000000),
+        size: z.number().int().positive().max(2147483647),
+        rooms: z.number().int().min(0).max(1000),
+        bathrooms: z.number().int().min(0).max(1000),
         hasBackyard: z.boolean(),
         hasLivingRoom: z.boolean(),
         hasKitchen: z.boolean(),
-        address: z.string().min(1),
-        city: z.string().min(1),
+        address: z.string().trim().min(1).max(500),
+        city: z.string().trim().min(1).max(100),
         state: z.string().length(2),
-        zipCode: z.string().optional(),
+        zipCode: z.string().max(10).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const isAdmin = ctx.user.role === 'admin';
-      
+
       try {
-        await ctx.db
+        const [property] = await ctx.db
           .insert(propertiesSchema)
           .values({
             title: input.title,
@@ -285,15 +289,8 @@ export const propertiesRouter = router({
             agentId: ctx.user.id,
             status: isAdmin ? 'ativa' : 'pendente',
             isApproved: isAdmin,
-          });
-        
-        const [property] = await ctx.db
-          .select()
-          .from(propertiesSchema)
-          .where(eq(propertiesSchema.agentId, ctx.user.id))
-          .orderBy(desc(propertiesSchema.id))
-          .limit(1);
-        
+          }).returning();
+
         // Registrar no histórico
         await createAuditLog({
           ctx,
@@ -303,8 +300,8 @@ export const propertiesRouter = router({
           entityName: property.title,
           description: `Imóvel "${input.title}" criado por ${ctx.user.name || ctx.user.email}`,
         });
-        
-        return { 
+
+        return {
           id: property.id,
           status: property.status,
           isApproved: property.isApproved,
@@ -320,51 +317,65 @@ export const propertiesRouter = router({
   update: agentProcedure
     .input(
       z.object({
-        id: z.number(),
-        title: z.string().min(1).optional(),
-        description: z.string().optional(),
+        id: idSchema,
+        title: z.string().trim().min(1).max(255).optional(),
+        description: z.string().max(10000).optional(),
         type: z.enum(['apartamento', 'casa', 'terreno', 'comercial', 'outro']).optional(),
         transactionType: z.enum(['venda', 'aluguel']).optional(),
-        price: z.number().int().positive().optional(),
-        size: z.number().int().positive().optional(),
-        rooms: z.number().int().min(0).optional(),
-        bathrooms: z.number().int().min(0).optional(),
+        price: z.number().int().positive().max(100000000000).optional(),
+        size: z.number().int().positive().max(2147483647).optional(),
+        rooms: z.number().int().min(0).max(1000).optional(),
+        bathrooms: z.number().int().min(0).max(1000).optional(),
         hasBackyard: z.boolean().optional(),
         hasLivingRoom: z.boolean().optional(),
         hasKitchen: z.boolean().optional(),
-        address: z.string().min(1).optional(),
-        city: z.string().min(1).optional(),
+        address: z.string().trim().min(1).max(500).optional(),
+        city: z.string().trim().min(1).max(100).optional(),
         state: z.string().length(2).optional(),
-        zipCode: z.string().optional(),
+        zipCode: z.string().max(10).optional(),
         status: z.enum(['pendente', 'ativa', 'vendida', 'alugada', 'inativa', 'rejeitada']).optional(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => ctx.db.transaction(async tx => {
+      ctx = {...ctx, db: tx as typeof ctx.db};
       const { id, ...updateData } = input;
-      
+
       // Check if property belongs to agent or is assigned to them
       const [property] = await ctx.db
         .select()
         .from(propertiesSchema)
         .where(
           and(
-            eq(propertiesSchema.id, id),
-            or(
+            and(eq(propertiesSchema.id, id),isNull(propertiesSchema.deletedAt)),
+            ctx.user.role === 'admin' ? undefined : or(
               eq(propertiesSchema.agentId, ctx.user.id),
               eq(propertiesSchema.assignedAgentId, ctx.user.id)
             )
           )
         )
-        .limit(1);
+        .limit(1).for('update');
 
       if (!property) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada ou você não tem permissão para editá-la' });
       }
 
-      // Restrict agent status transitions
-      if (ctx.user.role === 'agent' && updateData.status) {
-        if (updateData.status === 'ativa' || updateData.status === 'rejeitada') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: 'Agentes não podem aprovar ou rejeitar propriedades' });
+      if (updateData.status && updateData.status !== property.status) {
+        if (updateData.status === 'pendente' || updateData.status === 'rejeitada') {
+          throw new TRPCError({code:'BAD_REQUEST',message:'Use o fluxo de aprovação para revisar o imóvel'});
+        }
+        if (updateData.status === 'vendida' || updateData.status === 'alugada') {
+          throw new TRPCError({code:'BAD_REQUEST',message:'Use Registrar Transação para finalizar o imóvel e sua comissão'});
+        }
+        if (ctx.user.role !== 'admin' && updateData.status !== 'inativa') {
+          throw new TRPCError({code:'FORBIDDEN',message:'Agentes só podem inativar o imóvel; aprovação exige administrador'});
+        }
+        if (updateData.status === 'ativa' && !property.isApproved) {
+          throw new TRPCError({code:'BAD_REQUEST',message:'Aprove o imóvel antes de ativá-lo'});
+        }
+      }
+      if (['vendida','alugada'].includes(property.status) && (updateData.status || updateData.transactionType)) {
+        if (updateData.status !== undefined && updateData.status !== property.status || updateData.transactionType !== undefined && updateData.transactionType !== property.transactionType) {
+          throw new TRPCError({code:'CONFLICT',message:'Uma transação finalizada não pode ser alterada pela edição do imóvel'});
         }
       }
 
@@ -374,8 +385,8 @@ export const propertiesRouter = router({
 
       await ctx.db
         .update(propertiesSchema)
-        .set(updateData)
-        .where(eq(propertiesSchema.id, id));
+        .set({...updateData,...(property.status === 'rejeitada' && (!updateData.status || updateData.status === property.status) ? {status:'pendente' as const,isApproved:false,rejectionReason:null} : {})})
+        .where(and(eq(propertiesSchema.id, id),isNull(propertiesSchema.deletedAt)));
 
       // Registrar no histórico
       if (statusChanged) {
@@ -384,7 +395,7 @@ export const propertiesRouter = router({
           'alugada': 'property_rented',
         };
         const action = (actionMap[updateData.status!] || 'property_status_changed') as any;
-        
+
         await createAuditLog({
           ctx,
           action,
@@ -409,34 +420,36 @@ export const propertiesRouter = router({
       }
 
       return { success: true };
-    }),
+    })),
 
   // Delete a property (agent only, own properties)
   delete: agentProcedure
-    .input(z.object({ id: z.number() }))
-    .mutation(async ({ ctx, input }) => {
+    .input(z.object({ id: idSchema }))
+    .mutation(async ({ ctx, input }) => ctx.db.transaction(async tx => {
+      ctx = {...ctx, db: tx as typeof ctx.db};
       // Check if property belongs to agent or is assigned to them
       const [property] = await ctx.db
         .select()
         .from(propertiesSchema)
         .where(
           and(
-            eq(propertiesSchema.id, input.id),
-            or(
+            and(eq(propertiesSchema.id, input.id),isNull(propertiesSchema.deletedAt)),
+            ctx.user.role === 'admin' ? undefined : or(
               eq(propertiesSchema.agentId, ctx.user.id),
               eq(propertiesSchema.assignedAgentId, ctx.user.id)
             )
           )
         )
-        .limit(1);
+        .limit(1).for('update');
 
       if (!property) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada ou você não tem permissão para deletá-la' });
       }
 
       await ctx.db
-        .delete(propertiesSchema)
-        .where(eq(propertiesSchema.id, input.id));
+        .update(propertiesSchema)
+        .set({deletedAt:new Date()})
+        .where(and(eq(propertiesSchema.id, input.id),isNull(propertiesSchema.deletedAt)));
 
       // Registrar no histórico
       await createAuditLog({
@@ -446,25 +459,26 @@ export const propertiesRouter = router({
         entityId: input.id,
         entityName: property.title,
         previousValue: property,
-        description: `Imóvel "${property.title}" excluído`,
+        description: `Imóvel "${property.title}" arquivado; histórico financeiro preservado`,
       });
 
       return { success: true };
-    }),
+    })),
 
   // Atribuir imóvel a um corretor (admin only)
   assignAgent: adminProcedure
     .input(z.object({
-      propertyId: z.number(),
-      assignedAgentId: z.number().nullable(),
+      propertyId: idSchema,
+      assignedAgentId: idSchema.nullable(),
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => ctx.db.transaction(async tx => {
+      ctx = {...ctx, db: tx as typeof ctx.db};
       // Buscar propriedade atual
       const [property] = await ctx.db
         .select()
         .from(propertiesSchema)
-        .where(eq(propertiesSchema.id, input.propertyId))
-        .limit(1);
+        .where(and(eq(propertiesSchema.id, input.propertyId),isNull(propertiesSchema.deletedAt)))
+        .limit(1).for('update');
 
       if (!property) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
@@ -477,16 +491,16 @@ export const propertiesRouter = router({
           .select()
           .from(users)
           .where(eq(users.id, input.assignedAgentId))
-          .limit(1);
+          .limit(1).for('share');
 
         if (!agent) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'Corretor não encontrado' });
         }
-        
-        if (agent.role !== 'agent' && agent.role !== 'admin') {
+
+        if (agent.deletedAt || agent.status !== 'active' || (agent.role !== 'agent' && agent.role !== 'admin')) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'O usuário selecionado não é um corretor' });
         }
-        
+
         assignedAgentName = agent.name;
       }
 
@@ -505,7 +519,7 @@ export const propertiesRouter = router({
       await ctx.db
         .update(propertiesSchema)
         .set({ assignedAgentId: input.assignedAgentId })
-        .where(eq(propertiesSchema.id, input.propertyId));
+        .where(and(eq(propertiesSchema.id, input.propertyId),isNull(propertiesSchema.deletedAt)));
 
       // Registrar no histórico
       await createAuditLog({
@@ -516,33 +530,34 @@ export const propertiesRouter = router({
         entityName: property.title,
         previousValue: { assignedAgentId: property.assignedAgentId, assignedAgentName: previousAgentName },
         newValue: { assignedAgentId: input.assignedAgentId, assignedAgentName },
-        description: input.assignedAgentId 
+        description: input.assignedAgentId
           ? `Imóvel "${property.title}" atribuído ao corretor ${assignedAgentName}`
           : `Atribuição do imóvel "${property.title}" removida`,
       });
 
-      return { 
+      return {
         success: true,
         assignedAgentName,
-        message: input.assignedAgentId 
+        message: input.assignedAgentId
           ? `Imóvel atribuído com sucesso ao corretor ${assignedAgentName}`
           : 'Atribuição removida com sucesso'
       };
-    }),
+    })),
 
   // Definir comissão customizada (admin only)
   setCustomCommission: adminProcedure
     .input(z.object({
-      propertyId: z.number(),
-      customCommissionRate: z.number().min(0).max(10000).nullable(), // 0% a 100%, null = usar padrão
+      propertyId: idSchema,
+      customCommissionRate: z.number().int().min(0).max(10000).nullable(), // 0% a 100%, null = usar padrão
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => ctx.db.transaction(async tx => {
+      ctx = {...ctx, db: tx as typeof ctx.db};
       // Buscar propriedade atual
       const [property] = await ctx.db
         .select()
         .from(propertiesSchema)
-        .where(eq(propertiesSchema.id, input.propertyId))
-        .limit(1);
+        .where(and(eq(propertiesSchema.id, input.propertyId),isNull(propertiesSchema.deletedAt)))
+        .limit(1).for('update');
 
       if (!property) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
@@ -554,7 +569,7 @@ export const propertiesRouter = router({
       await ctx.db
         .update(propertiesSchema)
         .set({ customCommissionRate: input.customCommissionRate })
-        .where(eq(propertiesSchema.id, input.propertyId));
+        .where(and(eq(propertiesSchema.id, input.propertyId),isNull(propertiesSchema.deletedAt)));
 
       // Registrar no histórico
       const getCommissionLabel = (rate: number | null, transactionType: string) => {
@@ -575,33 +590,34 @@ export const propertiesRouter = router({
         description: `Comissão do imóvel "${property.title}" alterada de ${getCommissionLabel(previousRate, property.transactionType)} para ${getCommissionLabel(input.customCommissionRate, property.transactionType)}`,
       });
 
-      return { 
+      return {
         success: true,
         customCommissionRate: input.customCommissionRate,
-        message: input.customCommissionRate 
+        message: input.customCommissionRate !== null
           ? `Comissão customizada definida: ${input.customCommissionRate / 100}%`
           : 'Comissão restaurada ao padrão'
       };
-    }),
+    })),
 
   // Aprovar imóvel pendente (admin only)
   approve: adminProcedure
     .input(z.object({
-      propertyId: z.number(),
+      propertyId: idSchema,
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => ctx.db.transaction(async tx => {
+      ctx = {...ctx, db: tx as typeof ctx.db};
       // Buscar propriedade atual
       const [property] = await ctx.db
         .select()
         .from(propertiesSchema)
-        .where(eq(propertiesSchema.id, input.propertyId))
-        .limit(1);
+        .where(and(eq(propertiesSchema.id, input.propertyId),isNull(propertiesSchema.deletedAt)))
+        .limit(1).for('update');
 
       if (!property) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
       }
 
-      if (property.isApproved) {
+      if (property.isApproved || property.status !== 'pendente') {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Esta propriedade já está aprovada' });
       }
 
@@ -619,14 +635,14 @@ export const propertiesRouter = router({
       // Atualizar propriedade
       await ctx.db
         .update(propertiesSchema)
-        .set({ 
-          isApproved: true, 
+        .set({
+          isApproved: true,
           status: 'ativa',
           approvedBy: ctx.user.id,
           approvedAt: new Date(),
           rejectionReason: null,
         })
-        .where(eq(propertiesSchema.id, input.propertyId));
+        .where(and(eq(propertiesSchema.id, input.propertyId),isNull(propertiesSchema.deletedAt)));
 
       // Registrar no histórico
       await createAuditLog({
@@ -640,31 +656,32 @@ export const propertiesRouter = router({
         description: `Imóvel "${property.title}" criado por ${agentName} foi aprovado`,
       });
 
-      return { 
+      return {
         success: true,
         message: `Imóvel "${property.title}" aprovado com sucesso!`
       };
-    }),
+    })),
 
   // Rejeitar imóvel pendente (admin only)
   reject: adminProcedure
     .input(z.object({
-      propertyId: z.number(),
-      reason: z.string().min(1, 'É necessário informar o motivo da rejeição'),
+      propertyId: idSchema,
+      reason: z.string().max(2000).min(1, 'É necessário informar o motivo da rejeição'),
     }))
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => ctx.db.transaction(async tx => {
+      ctx = {...ctx, db: tx as typeof ctx.db};
       // Buscar propriedade atual
       const [property] = await ctx.db
         .select()
         .from(propertiesSchema)
-        .where(eq(propertiesSchema.id, input.propertyId))
-        .limit(1);
+        .where(and(eq(propertiesSchema.id, input.propertyId),isNull(propertiesSchema.deletedAt)))
+        .limit(1).for('update');
 
       if (!property) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Propriedade não encontrada' });
       }
 
-      if (property.isApproved) {
+      if (property.isApproved || property.status !== 'pendente') {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não é possível rejeitar uma propriedade já aprovada' });
       }
 
@@ -682,11 +699,11 @@ export const propertiesRouter = router({
       // Atualizar propriedade
       await ctx.db
         .update(propertiesSchema)
-        .set({ 
+        .set({
           status: 'rejeitada',
           rejectionReason: input.reason,
         })
-        .where(eq(propertiesSchema.id, input.propertyId));
+        .where(and(eq(propertiesSchema.id, input.propertyId),isNull(propertiesSchema.deletedAt)));
 
       // Registrar no histórico
       await createAuditLog({
@@ -700,18 +717,18 @@ export const propertiesRouter = router({
         description: `Imóvel "${property.title}" criado por ${agentName} foi rejeitado. Motivo: ${input.reason}`,
       });
 
-      return { 
+      return {
         success: true,
         message: `Imóvel "${property.title}" rejeitado`
       };
-    }),
+    })),
 
   // List all unique cities where properties are located
   listCities: publicProcedure.query(async ({ ctx }) => {
     const result = await ctx.db
       .selectDistinct({ city: propertiesSchema.city })
       .from(propertiesSchema)
-      .where(and(eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)))
+      .where(and(isNull(propertiesSchema.deletedAt), eq(propertiesSchema.status, 'ativa'), eq(propertiesSchema.isApproved, true)))
       .orderBy(propertiesSchema.city);
     return result.map(r => r.city).filter(Boolean);
   }),

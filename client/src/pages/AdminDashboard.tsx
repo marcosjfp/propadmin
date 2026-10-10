@@ -53,11 +53,13 @@ export default function AdminDashboard() {
 
   const [userPage, setUserPage] = useState(1);
   const userPageSize = 20;
+  const [agentPage,setAgentPage] = useState(1);
 
   // Queries
   const usersQuery = trpc.users.list.useQuery({ page: userPage, pageSize: userPageSize });
-  // Pass high limit for properties temporarily until properties dashboard pagination is built
-  const propertiesQuery = trpc.properties.listAll.useQuery({ page: 1, pageSize: 50 });
+  const statsQuery = trpc.dashboard.stats.useQuery();
+  const agentsQuery = trpc.dashboard.agents.useQuery({page:agentPage,pageSize:20});
+  const agentOptionsQuery = trpc.users.listAgents.useQuery();
   const commissionsQuery = trpc.commissions.list.useQuery();
 
   // Mutations
@@ -67,24 +69,6 @@ export default function AdminDashboard() {
   const createAgentMutation = trpc.users.createAgent.useMutation();
   const updateCommissionStatusMutation = trpc.commissions.updateStatus.useMutation();
 
-  if (user?.role !== "admin") {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>Acesso Negado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-600 mb-4">Apenas administradores podem acessar esta página.</p>
-            <Link href="/">
-              <Button className="w-full">Voltar ao Início</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -93,14 +77,7 @@ export default function AdminDashboard() {
   };
 
   // Statistics
-  const totalUsers = usersQuery.data?.totalCount || 0;
-  // Fallbacks if mapping over items or if items undefined
-  const totalAgents = usersQuery.data?.items?.filter(u => u.role === "agent").length || 0;
-  const totalProperties = propertiesQuery.data?.totalCount || 0;
-  const activeProperties = propertiesQuery.data?.items?.filter(p => p.status === "ativa").length || 0;
-  const totalCommissions = commissionsQuery.data?.reduce((sum, c) => sum + c.commissionAmount, 0) || 0;
-  const pendingCommissions = commissionsQuery.data?.filter(c => c.status === "pendente").reduce((sum, c) => sum + c.commissionAmount, 0) || 0;
-  const paidCommissions = commissionsQuery.data?.filter(c => c.status === "paga").reduce((sum, c) => sum + c.commissionAmount, 0) || 0;
+  const {totalUsers=0,totalAgents=0,totalProperties=0,activeProperties=0,totalCommissions=0,pendingCommissions=0,paidCommissions=0} = statsQuery.data ?? {};
 
   // Filtrar comissões por período
   const filteredCommissions = useMemo(() => {
@@ -147,6 +124,24 @@ export default function AdminDashboard() {
     return { total, paid, pending, salesCount, rentalsCount, transactionVolume, count: filteredCommissions.length };
   }, [filteredCommissions]);
 
+  if (user?.role !== "admin") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>Acesso Negado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600 mb-4">Apenas administradores podem acessar esta página.</p>
+            <Link href="/">
+              <Button className="w-full">Voltar ao Início</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const handleEditUser = (u: any) => {
     setEditingUser(u);
     setUserForm({
@@ -171,20 +166,26 @@ export default function AdminDashboard() {
       setUserDialogOpen(false);
       setEditingUser(null);
       usersQuery.refetch();
+      statsQuery.refetch();
+      agentsQuery.refetch();
+      agentOptionsQuery.refetch();
     } catch (error: any) {
       toast.error("Erro ao atualizar usuário: " + (error?.message || "Erro desconhecido"));
     }
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!confirm("Tem certeza que deseja excluir este usuário?")) return;
+    if (!confirm("Tem certeza que deseja desativar este usuário?")) return;
 
     try {
       await deleteUserMutation.mutateAsync({ id: userId });
-      toast.success("Usuário excluído com sucesso!");
+      toast.success("Usuário desativado com sucesso!");
       usersQuery.refetch();
+      statsQuery.refetch();
+      agentsQuery.refetch();
+      agentOptionsQuery.refetch();
     } catch (error: any) {
-      toast.error("Erro ao excluir usuário: " + (error?.message || "Erro desconhecido"));
+      toast.error("Erro ao desativar usuário: " + (error?.message || "Erro desconhecido"));
     }
   };
 
@@ -198,6 +199,9 @@ export default function AdminDashboard() {
       await promoteToAgentMutation.mutateAsync({ id: userId, creci });
       toast.success("Usuário promovido a corretor com sucesso!");
       usersQuery.refetch();
+      statsQuery.refetch();
+      agentsQuery.refetch();
+      agentOptionsQuery.refetch();
     } catch (error: any) {
       toast.error("Erro ao promover usuário: " + (error?.message || "Erro desconhecido"));
     }
@@ -230,6 +234,9 @@ export default function AdminDashboard() {
       setCreateAgentDialogOpen(false);
       setNewAgentForm({ name: "", email: "", phone: "", creci: "", username: "", password: "" });
       usersQuery.refetch();
+      statsQuery.refetch();
+      agentsQuery.refetch();
+      agentOptionsQuery.refetch();
     } catch (error: any) {
       toast.error("Erro ao criar corretor: " + (error?.message || "Erro desconhecido"));
     }
@@ -244,6 +251,8 @@ export default function AdminDashboard() {
       });
       toast.success("Status da comissão atualizado!");
       commissionsQuery.refetch();
+      statsQuery.refetch();
+      agentsQuery.refetch();
     } catch (error: any) {
       toast.error("Erro ao atualizar status: " + (error?.message || "Erro desconhecido"));
     }
@@ -449,6 +458,7 @@ export default function AdminDashboard() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    aria-label={`Editar ${u.name || "usuário"}`}
                                     onClick={() => handleEditUser(u)}
                                   >
                                     <Edit2 className="h-4 w-4 text-blue-600" />
@@ -456,6 +466,7 @@ export default function AdminDashboard() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    aria-label={`Desativar ${u.name || "usuário"}`}
                                     onClick={() => handleDeleteUser(u.id)}
                                     disabled={u.id === user?.id}
                                   >
@@ -501,7 +512,8 @@ export default function AdminDashboard() {
                               variant="outline"
                               size="sm"
                               className="flex-1"
-                              onClick={() => handleEditUser(u)}
+                              aria-label={`Editar ${u.name || "usuário"}`}
+                                    onClick={() => handleEditUser(u)}
                             >
                               <Edit2 className="h-4 w-4 mr-2" />
                               Editar
@@ -510,11 +522,12 @@ export default function AdminDashboard() {
                               variant="outline"
                               size="sm"
                               className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
-                              onClick={() => handleDeleteUser(u.id)}
+                              aria-label={`Desativar ${u.name || "usuário"}`}
+                                    onClick={() => handleDeleteUser(u.id)}
                               disabled={u.id === user?.id}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
-                              Excluir
+                              Desativar
                             </Button>
                           </div>
                         </div>
@@ -582,6 +595,7 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <Select 
+                            disabled={commission.status!=="pendente"}
                             value={commission.status} 
                             onValueChange={(value) => handleUpdateCommissionStatus(commission.id, value as any)}
                           >
@@ -636,16 +650,14 @@ export default function AdminDashboard() {
                 <CardDescription>Resumo de comissões por corretor</CardDescription>
               </CardHeader>
               <CardContent>
-                {usersQuery.isLoading || commissionsQuery.isLoading ? (
+                {agentsQuery.isLoading ? (
                   <p className="text-center py-4 text-gray-500">Carregando...</p>
                 ) : (
                   <div className="space-y-4">
-                    {usersQuery.data?.items?.filter(u => u.role === "agent").map((agent) => {
-                      const agentCommissions = commissionsQuery.data?.filter(c => c.agentId === agent.id) || [];
-                      const totalAgent = agentCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);
-                      const paidAgent = agentCommissions.filter(c => c.status === "paga").reduce((sum, c) => sum + c.commissionAmount, 0);
-                      const pendingAgent = agentCommissions.filter(c => c.status === "pendente").reduce((sum, c) => sum + c.commissionAmount, 0);
-                      const agentProperties = propertiesQuery.data?.items?.filter(p => p.agentId === agent.id) || [];
+                    {agentsQuery.data?.items.map((agent) => {
+                      const totalAgent = agent.total;
+                      const paidAgent = agent.paid;
+                      const pendingAgent = agent.pending;
 
                       return (
                         <div key={agent.id} className="border rounded-lg p-4">
@@ -657,14 +669,14 @@ export default function AdminDashboard() {
                             </div>
                             <div className="text-right">
                               <p className="text-sm text-gray-600">Imóveis cadastrados</p>
-                              <p className="text-2xl font-bold text-blue-600">{agentProperties.length}</p>
+                              <p className="text-2xl font-bold text-blue-600">{agent.propertyCount}</p>
                             </div>
                           </div>
                           <div className="grid md:grid-cols-3 gap-4 bg-gray-50 rounded-lg p-4">
                             <div>
                               <p className="text-sm text-gray-600">Total de Comissões</p>
                               <p className="text-xl font-bold">{formatPrice(totalAgent)}</p>
-                              <p className="text-xs text-gray-500">{agentCommissions.length} transações</p>
+                              <p className="text-xs text-gray-500">{agent.commissionCount} transações</p>
                             </div>
                             <div>
                               <p className="text-sm text-gray-600">Comissões Pagas</p>
@@ -678,7 +690,14 @@ export default function AdminDashboard() {
                         </div>
                       );
                     })}
-                    {(!usersQuery.data?.items || usersQuery.data.items.filter(u => u.role === "agent").length === 0) && (
+                    {(agentsQuery.data?.totalPages ?? 0) > 1 && (
+                      <div className="flex items-center justify-between">
+                        <Button variant="outline" disabled={agentPage===1} onClick={()=>setAgentPage(p=>p-1)}>Anterior</Button>
+                        <span>Página {agentPage} de {agentsQuery.data?.totalPages}</span>
+                        <Button variant="outline" disabled={agentPage===(agentsQuery.data?.totalPages ?? 1)} onClick={()=>setAgentPage(p=>p+1)}>Próxima</Button>
+                      </div>
+                    )}
+                    {(!agentsQuery.data?.items.length) && (
                       <p className="text-center py-4 text-gray-500">Nenhum corretor cadastrado</p>
                     )}
                   </div>
@@ -750,7 +769,7 @@ export default function AdminDashboard() {
                     Ranking de Corretores no Período
                   </h3>
                   <div className="space-y-3">
-                    {usersQuery.data?.items?.filter(u => u.role === "agent")
+                    {(agentOptionsQuery.data ?? [])
                       .map(agent => {
                         const agentPeriodCommissions = filteredCommissions.filter(c => c.agentId === agent.id);
                         const total = agentPeriodCommissions.reduce((sum, c) => sum + c.commissionAmount, 0);
@@ -894,9 +913,9 @@ export default function AdminDashboard() {
             <Button 
               className="w-full bg-blue-600 hover:bg-blue-700"
               onClick={handleSaveUser}
-              disabled={updateUserMutation.isPending}
+              disabled={updateUserMutation.isLoading}
             >
-              {updateUserMutation.isPending ? "Salvando..." : "Salvar"}
+              {updateUserMutation.isLoading ? "Salvando..." : "Salvar"}
             </Button>
           </div>
         </DialogContent>
@@ -963,9 +982,9 @@ export default function AdminDashboard() {
             <Button 
               className="w-full bg-blue-600 hover:bg-blue-700"
               onClick={handleCreateAgent}
-              disabled={createAgentMutation.isPending}
+              disabled={createAgentMutation.isLoading}
             >
-              {createAgentMutation.isPending ? "Criando..." : "Criar Corretor"}
+              {createAgentMutation.isLoading ? "Criando..." : "Criar Corretor"}
             </Button>
           </div>
         </DialogContent>

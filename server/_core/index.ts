@@ -3,9 +3,12 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 import express from 'express';
+import { assertProductionConfig } from '../config.js';
+import { registerImageRoutes } from '../image-http.js';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import { DatabaseRateLimitStore } from '../rate-limits.js';
 import helmet from 'helmet';
 import * as trpcExpress from '@trpc/server/adapters/express';
 import { appRouter } from '../routers/index.js';
@@ -47,12 +50,13 @@ if (staticFilesPath) {
   console.log('⚠️  No static files found — running API-only mode.');
 }
 
+assertProductionConfig();
 const app = express();
 const port = process.env.PORT || 3000;
-const host = '0.0.0.0'; // Necessário para Railway e outros cloud providers
+const host = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1'); // Necessário para Railway e outros cloud providers
 
 // Trust proxy - needed for Railway and other cloud providers to detect HTTPS
-app.set('trust proxy', 1);
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || (process.env.VERCEL ? 1 : 0)));
 
 // Health check endpoint PRIMEIRO - antes de qualquer middleware
 app.get('/api/health', async (req, res) => {
@@ -67,8 +71,9 @@ app.get('/api/health', async (req, res) => {
 
 // Middleware
 const generalLimiter = rateLimit({
+  store: new DatabaseRateLimitStore('http-general'),
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
@@ -76,8 +81,9 @@ const generalLimiter = rateLimit({
 });
 
 const trpcLimiter = rateLimit({
+  store: new DatabaseRateLimitStore('http-trpc'),
   windowMs: 15 * 60 * 1000,
-  max: 150,
+  max: 600,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
@@ -85,17 +91,19 @@ const trpcLimiter = rateLimit({
 
 const isProduction = process.env.NODE_ENV === 'production';
 if (isProduction && !process.env.CLIENT_URL) {
-  console.warn('⚠️ WARNING: CLIENT_URL is not set in production. Using generic origin which might cause CORS issues.');
+  throw new Error('CLIENT_URL is required in production for CSRF protection');
 }
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || (isProduction ? process.env.CLIENT_URL : 'http://localhost:5173'),
+  origin: process.env.CLIENT_URL ? new URL(process.env.CLIENT_URL).origin : 'http://localhost:5173',
   credentials: true,
 }));
 app.use(helmet());
-app.use(generalLimiter);
+app.use(['/api','/trpc'], generalLimiter);
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+
+registerImageRoutes(app);
 
 // tRPC endpoint
 app.use(
@@ -109,7 +117,7 @@ app.use(
 
 // Development login endpoint - Creates a mock authenticated session (dev only)
 app.get('/api/dev-login', async (req, res) => {
-  if (process.env.NODE_ENV !== 'development') {
+  if (process.env.NODE_ENV !== 'development' || process.env.ENABLE_DEV_LOGIN !== 'true') {
     return res.status(403).json({ error: 'Available only in development mode' });
   }
   try {
@@ -118,14 +126,14 @@ app.get('/api/dev-login', async (req, res) => {
     const role: 'user' | 'agent' | 'admin' = ['user', 'agent', 'admin'].includes(roleParam)
       ? (roleParam as 'user' | 'agent' | 'admin')
       : 'agent';
-    
+
     // Buscar usuário do banco de dados pelo role
     const [dbUser] = await db
       .select()
       .from(users)
       .where(eq(users.role, role))
       .limit(1);
-    
+
     if (!dbUser) {
       console.error(`❌ No user found with role: ${role}`);
       return res.status(404).send(`Usuário com role '${role}' não encontrado no banco de dados`);
@@ -137,9 +145,9 @@ app.get('/api/dev-login', async (req, res) => {
       email: dbUser.email,
       role: dbUser.role,
     });
-    
+
     console.log(`🔐 Setting JWT session cookie for user: ${dbUser.name} (${dbUser.role}) [ID: ${dbUser.id}]`);
-    
+
     // Cookie settings for development
     res.cookie(COOKIE_NAME, jwtToken, {
       httpOnly: true,
@@ -161,7 +169,7 @@ app.get('/api/dev-login', async (req, res) => {
 
 // Dev login page with role selection (dev only)
 app.get('/api/dev-login-page', (req, res) => {
-  if (process.env.NODE_ENV !== 'development') {
+  if (process.env.NODE_ENV !== 'development' || process.env.ENABLE_DEV_LOGIN !== 'true') {
     return res.status(403).json({ error: 'Available only in development mode' });
   }
   // Se passou role na query, redireciona direto para o login
@@ -179,7 +187,7 @@ app.get('/api/dev-login-page', (req, res) => {
       <title>Login - Administrador de Propriedades</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { 
+        body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
           min-height: 100vh;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -318,10 +326,10 @@ app.get('/api/dev-login-page', (req, res) => {
         <div class="logo">🏠</div>
         <h1>Bem-vindo!</h1>
         <p class="subtitle">Administrador de Propriedades</p>
-        
+
         <div class="role-section">
           <p class="role-label">Selecione seu perfil para entrar</p>
-          
+
           <a href="/api/dev-login?role=admin" class="login-btn admin">
             <span class="icon">🛡️</span>
             <span class="text">
@@ -330,7 +338,7 @@ app.get('/api/dev-login-page', (req, res) => {
             </span>
             <span class="arrow">→</span>
           </a>
-          
+
           <a href="/api/dev-login?role=agent" class="login-btn corretor">
             <span class="icon">💼</span>
             <span class="text">
@@ -339,7 +347,7 @@ app.get('/api/dev-login-page', (req, res) => {
             </span>
             <span class="arrow">→</span>
           </a>
-          
+
           <a href="/api/dev-login?role=user" class="login-btn usuario">
             <span class="icon">👤</span>
             <span class="text">
@@ -349,9 +357,9 @@ app.get('/api/dev-login-page', (req, res) => {
             <span class="arrow">→</span>
           </a>
         </div>
-        
+
         <div class="divider"><span>Ambiente de Desenvolvimento</span></div>
-        
+
         <p class="footer">
           Sistema de gerenciamento imobiliário
         </p>
@@ -365,14 +373,14 @@ app.get('/api/dev-login-page', (req, res) => {
 if (staticFilesPath) {
   console.log(`🌐 Configuring static file serving from: ${staticFilesPath}`);
   app.use(express.static(staticFilesPath));
-  
+
   // Catch-all route for SPA - must be after all other routes
-  app.get('*all', (req, res) => {
+  app.get('/{*all}', (req, res) => {
     res.sendFile(path.join(staticFilesPath!, 'index.html'));
   });
 } else {
   // Fallback: serve a simple HTML page
-  app.get('*all', (req, res) => {
+  app.get('/{*all}', (req, res) => {
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -390,7 +398,7 @@ if (staticFilesPath) {
 // Start server
 async function startServer() {
   console.log('🔄 Starting HTTP server...');
-  
+
   // Iniciar o servidor PRIMEIRO para passar no health check
   const server = app.listen(Number(port), host, () => {
     console.log('');
@@ -403,10 +411,17 @@ async function startServer() {
     console.log('');
   });
 
+  const shutdown = () => {
+    server.close(async () => { await (await import('../db.js')).pool().end(); process.exit(0); });
+    setTimeout(() => process.exit(1),10000).unref();
+  };
+  process.once('SIGTERM',shutdown);
+  process.once('SIGINT',shutdown);
+
   // Testar conexão com banco DEPOIS do servidor iniciar
   console.log('🔄 Testing database connection...');
   const dbConnected = await testConnection();
-  
+
   if (dbConnected) {
     console.log('💾 Database: Connected to Supabase Postgres');
   } else {

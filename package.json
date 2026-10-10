@@ -1,55 +1,60 @@
 {
   "name": "administrador-de-propriedades",
   "version": "1.0.0",
-  "description": "Aplicação de gerenciamento de propriedades",
+  "description": "Aplica\u00e7\u00e3o de gerenciamento de propriedades",
   "main": "server/_core/index.ts",
   "type": "module",
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12"
   },
   "scripts": {
     "dev": "pnpm exec tsx watch server/_core/index.ts",
     "start": "node --import tsx server/_core/index.ts",
-    "build": "pnpm --dir client build && mkdir -p dist && cp -a client/dist/. dist/",
-    "postinstall": "echo 'Skipping postinstall'",
+    "build": "node scripts/build.mjs",
     "client-dev": "pnpm --dir client dev",
     "client-build": "pnpm --dir client build",
     "type-check": "tsc --noEmit",
-    "db:push": "pnpm exec drizzle-kit push",
-    "db:migrate": "pnpm exec drizzle-kit migrate",
-    "db:studio": "pnpm exec drizzle-kit studio"
+    "db:migrate": "node --import tsx scripts/migrate.ts",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "db:seed-local-admin": "node --env-file=.env.test.local --import tsx scripts/seed-local-admin.ts",
+    "dev:local": "node --env-file=.env.test.local --import tsx server/_core/index.ts",
+    "production:check": "node --import tsx scripts/production-check.ts",
+    "test:integration": "node --env-file=.env.test.local scripts/test-integration.mjs",
+    "db:migrate-images": "node --import tsx scripts/migrate-images.ts",
+    "storage:cleanup": "node --import tsx scripts/cleanup-storage.ts"
   },
   "keywords": [
     "propriedades",
     "gerenciamento",
-    "imobiliário"
+    "imobili\u00e1rio"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@trpc/server": "^10.45.2",
-    "@types/bcryptjs": "^3.0.0",
+    "@trpc/server": "^10.45.4",
     "@types/cookie-parser": "^1.4.10",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/node": "^20.14.2",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.0",
-    "drizzle-orm": "^0.45.2",
-    "express": "^5.2.1",
-    "express-rate-limit": "^8.3.1",
-    "helmet": "^8.1.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "drizzle-orm": "^0.45.4",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "postgres": "^3.4.9",
-    "superjson": "^2.2.1",
-    "tsx": "^4.11.0",
-    "typescript": "^5.4.5",
-    "zod": "^3.22.4"
+    "superjson": "^2.2.6",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "zod": "^3.25.76",
+    "@supabase/supabase-js": "^2.117.3",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.10",
-    "drizzle-kit": "^0.31.10"
-  }
+    "@types/jsonwebtoken": "^9.0.10"
+  },
+  "packageManager": "pnpm@11.1.3"
 }

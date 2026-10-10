@@ -120,3 +120,5 @@ create-db-verified.mjs
 create-db-exhaustive.mjs
 debug-db.mjs
 list-db.mjs
+
+.local-images/

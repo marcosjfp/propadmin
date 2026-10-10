@@ -1,3 +1,4 @@
+import { auditActions } from "@shared/validation";
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -55,7 +56,7 @@ export default function AuditHistory() {
     page,
     limit: 20,
     entityType: filters.entityType as any || undefined,
-    action: filters.action || undefined,
+    action: auditActions.find(action => action === filters.action),
     search: filters.search || undefined,
     startDate: filters.startDate || undefined,
     endDate: filters.endDate || undefined,

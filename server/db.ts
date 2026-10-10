@@ -1,4 +1,4 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../drizzle/schema.js';
 
@@ -13,7 +13,8 @@ function getDatabaseUrl(): string {
 
 // Lazy pool creation to prevent crash on startup
 let client: postgres.Sql | null = null;
-let dbInstance: ReturnType<typeof drizzle> | null = null;
+export type Database = PostgresJsDatabase<typeof schema>;
+let dbInstance: Database | null = null;
 
 function getClient(): postgres.Sql {
   if (!client) {
@@ -22,6 +23,7 @@ function getClient(): postgres.Sql {
       connect_timeout: 10,
       idle_timeout: 20,
       prepare: false,
+      ...(process.env.NODE_ENV === 'production' ? {ssl:'verify-full' as const} : {}),
     });
   }
   return client;
@@ -36,9 +38,9 @@ function getDb() {
 }
 
 // Export db as a proxy that lazily initializes
-export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+export const db = new Proxy({} as Database, {
   get(_, prop) {
-    return (getDb() as any)[prop];
+    return Reflect.get(getDb(), prop);
   }
 });
 

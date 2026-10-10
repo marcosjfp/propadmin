@@ -1,3 +1,4 @@
+import { propertyStatuses, propertyTypes, transactionTypes } from '@shared/validation';
 import { useState, useMemo } from "react";
 
 export interface PropertyFilters {
@@ -55,13 +56,13 @@ export function usePropertyFilters() {
   const queryParams = useMemo(() => {
     return {
       search: filters.search || undefined,
-      status: filters.status === 'all' ? undefined : filters.status,
-      type: filters.type === 'all' ? undefined : filters.type,
-      transactionType: filters.transactionType === 'all' ? undefined : filters.transactionType,
+      status: propertyStatuses.find(value => value === filters.status),
+      type: propertyTypes.find(value => value === filters.type),
+      transactionType: transactionTypes.find(value => value === filters.transactionType),
       city: (filters.city === 'all' || !filters.city) ? undefined : filters.city,
-      minPrice: filters.minPrice ? parseFloat(filters.minPrice) : undefined,
-      maxPrice: filters.maxPrice ? parseFloat(filters.maxPrice) : undefined,
-      minRooms: filters.minRooms ? parseInt(filters.minRooms) : undefined,
+      minPrice: filters.minPrice ? Number.isFinite(Number(filters.minPrice)) ? Number(filters.minPrice) : undefined : undefined,
+      maxPrice: filters.maxPrice ? Number.isFinite(Number(filters.maxPrice)) ? Number(filters.maxPrice) : undefined : undefined,
+      minRooms: filters.minRooms ? Number.isInteger(Number(filters.minRooms)) ? Number(filters.minRooms) : undefined : undefined,
     };
   }, [filters]);
 
