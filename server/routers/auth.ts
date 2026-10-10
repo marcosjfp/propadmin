@@ -1,10 +1,10 @@
-import { router, publicProcedure } from '../trpc';
+import { router, publicProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { users } from '../../drizzle/schema';
+import { users } from '../../drizzle/schema.js';
 import { eq } from 'drizzle-orm';
-import { createJWT } from '../context';
-import { COOKIE_NAME } from '../../shared/const';
+import { createJWT } from '../context.js';
+import { COOKIE_NAME } from '../../shared/const.js';
 import { enforceRate } from '../rate-limits.js';
 import { passwordSchema } from '../../shared/validation.js';
 import { randomUUID } from 'node:crypto';

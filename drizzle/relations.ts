@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { users, properties, commissions } from "./schema";
+import { users, properties, commissions } from "./schema.js";
 
 /**
  * Relações entre as tabelas para facilitar consultas com joins

@@ -20,7 +20,7 @@ The confirmed application issues below were repaired and checked locally. Remote
 ## Validation
 
 - Root strict TypeScript check, client TypeScript/build and zero-warning ESLint pass.
-- All 22 tests pass with local PostgreSQL: fresh/repeated/legacy migrations, recursive historical redaction, session revocation, role boundaries, aggregate pagination, administrator races, approval races, commission lifecycle and beneficiary rounding, concurrent image operations and shared rate counters. HTTP tests also start a real server and verify cookies, signed uploads, idempotent completion, WebP reads and pending-image privacy.
+- All 23 tests pass with local PostgreSQL: fresh/repeated/legacy migrations, recursive historical redaction, session revocation, role boundaries, aggregate pagination, administrator races, approval races, commission lifecycle and beneficiary rounding, concurrent image operations and shared rate counters. HTTP tests also start a real server and verify cookies, signed uploads, idempotent completion, WebP reads and pending-image privacy.
 - Browser smoke checks cover real sign-in, authenticated dashboard, property management/form and smaller-screen layout. These are manual smoke checks, not a comprehensive browser automation suite.
 - The build has no chunk-size warning: largest JavaScript chunk is approximately 135 KB before gzip, compared with roughly 567 KB before route splitting.
 - Dependency audit reports zero known advisories in the resolved lockfile. Frozen-lockfile installation passes.
@@ -31,3 +31,7 @@ The confirmed application issues below were repaired and checked locally. Remote
 Configure the real HTTPS origin, production secrets, PostgreSQL access and private Supabase bucket; reconcile any legacy duplicate commissions, migrate inline images, bootstrap/verify the intended administrator and pass `pnpm production:check` against staging and production before release. No production readiness claim is made without those checks.
 
 Further improvements beyond these repairs include a full browser regression suite, password recovery/MFA if required by the product, and database pagination for increasingly large commission reports. The report currently loads the complete commission set for date-range calculations, so test expected production data volumes. Shared formatters/status labels can be consolidated further without changing behavior.
+
+## Live deployment follow-up
+
+The supplied Vercel log confirmed `ERR_MODULE_NOT_FOUND` from extensionless relative imports in the auth router. Those imports and the schema-relations import now use `.js`, backend resolution uses NodeNext, and every production build compiles and loads the server through native Node ESM. Local `tsx` tests had not exposed this deployment-specific failure. The detailed deployment guide now separates runtime transaction pooling from administrative session pooling and supports optional provider CA PEM configuration. The live deployment still needs the corrected commit and environment/migrations; no remote changes were made here.

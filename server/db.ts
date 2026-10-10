@@ -1,6 +1,7 @@
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../drizzle/schema.js';
+import { databaseOptions } from './database-options.js';
 
 // Build DATABASE_URL from individual variables or use the full URL
 function getDatabaseUrl(): string {
@@ -22,8 +23,7 @@ function getClient(): postgres.Sql {
       max: 1,
       connect_timeout: 10,
       idle_timeout: 20,
-      prepare: false,
-      ...(process.env.NODE_ENV === 'production' ? {ssl:'verify-full' as const} : {}),
+      ...databaseOptions(),
     });
   }
   return client;

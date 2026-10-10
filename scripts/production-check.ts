@@ -1,3 +1,4 @@
+import { databaseOptions } from '../server/database-options.js';
 import dotenv from 'dotenv';
 import postgres from 'postgres';
 import { createClient } from '@supabase/supabase-js';
@@ -7,7 +8,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 dotenv.config({path:'.env.local'});dotenv.config();
 assertProductionConfig({...process.env,NODE_ENV:'production'});
-const sql=postgres(process.env.DATABASE_URL!,{max:1,prepare:false});
+const sql=postgres(process.env.DATABASE_URL!,{max:1,...databaseOptions()});
 try {
   const applied=await sql`SELECT name,checksum FROM propadmin_migrations`;
   for (const file of migrationFiles) {

@@ -1,3 +1,4 @@
+import { databaseOptions } from '../server/database-options.js';
 import dotenv from 'dotenv';
 import postgres from 'postgres';
 import { createClient } from '@supabase/supabase-js';
@@ -7,7 +8,7 @@ if (!process.env.DATABASE_URL || !process.env.SUPABASE_URL || !process.env.SUPAB
   throw new Error('Configure the database and private Supabase storage before running cleanup');
 }
 const apply=process.argv.includes('--apply');
-const sql=postgres(process.env.DATABASE_URL,{max:1,prepare:false});
+const sql=postgres(process.env.DATABASE_URL,{max:1,...databaseOptions()});
 const bucket=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY!,{auth:{persistSession:false}}).storage.from(process.env.SUPABASE_STORAGE_BUCKET || 'property-images');
 const cutoff=Date.now()-24*60*60*1000;
 

@@ -21,7 +21,8 @@
     "production:check": "node --import tsx scripts/production-check.ts",
     "test:integration": "node --env-file=.env.test.local scripts/test-integration.mjs",
     "db:migrate-images": "node --import tsx scripts/migrate-images.ts",
-    "storage:cleanup": "node --import tsx scripts/cleanup-storage.ts"
+    "storage:cleanup": "node --import tsx scripts/cleanup-storage.ts",
+    "server:check": "node scripts/check-server.mjs"
   },
   "keywords": [
     "propriedades",

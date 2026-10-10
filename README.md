@@ -24,6 +24,7 @@ Open http://localhost:3000/login. For frontend hot reload, run `pnpm client-dev`
 
 ```sh
 pnpm type-check
+pnpm server:check
 pnpm --dir client lint
 pnpm test
 pnpm test:integration

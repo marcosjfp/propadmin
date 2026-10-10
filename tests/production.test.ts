@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { passwordSchema, idSchema, dateFilterSchema } from '../shared/validation.js';
+import { databaseOptions } from '../server/database-options.js';
 import { assertProductionConfig } from '../server/config.js';
 import { normalizeImage } from '../server/storage.js';
 
@@ -31,6 +32,14 @@ test('production configuration rejects insecure or incomplete settings',()=>{
   assert.throws(()=>assertProductionConfig({...env,SUPABASE_SERVICE_ROLE_KEY:''}));
   assert.throws(()=>assertProductionConfig({...env,ENABLE_DEV_LOGIN:'true'}));
   assert.throws(()=>assertProductionConfig({...env,DATABASE_URL:'postgresql://test:test@database.example/test?sslmode=require'}));
+});
+
+test('database connections disable pipelining and preserve verified TLS with a configured CA',()=>{
+  assert.equal(databaseOptions({NODE_ENV:'production'}).ssl,'verify-full');
+  assert.equal(databaseOptions().max_pipeline,1);
+  const pem='-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----';
+  assert.deepEqual(databaseOptions({DATABASE_SSL_CA:pem.replaceAll('\n','\\n')}).ssl,{ca:pem,rejectUnauthorized:true});
+  assert.throws(()=>databaseOptions({DATABASE_SSL_CA:'not-a-certificate'}));
 });
 
 test('image decoder rejects MIME spoofing and creates bounded WebP derivatives',async ()=>{
