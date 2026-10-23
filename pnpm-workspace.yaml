@@ -2,3 +2,5 @@ packages:
   - 'client'
 allowBuilds:
   esbuild: true
+overrides:
+  express-rate-limit>ip-address: 10.7.4

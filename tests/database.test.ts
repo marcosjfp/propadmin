@@ -8,15 +8,15 @@ test('local database integration: login, revoked sessions, safe serialization, a
   const url = new URL(process.env.DATABASE_URL ?? '');
   assert.ok(['127.0.0.1','localhost','[::1]'].includes(url.hostname), 'Integration tests require a localhost database');
   assert.notEqual(process.env.NODE_ENV, 'production');
-  const { drizzle } = await import('drizzle-orm/postgres-js');
-  const { default: postgres } = await import('postgres');
+  const { drizzle } = await import('drizzle-orm/node-postgres');
+  const { Pool } = await import('pg');
   const { eq } = await import('drizzle-orm');
   const schema = await import('../drizzle/schema.js');
   const { appRouter } = await import('../server/routers/index.js');
   const { createContext, createJWT } = await import('../server/context.js');
   const { pool } = await import('../server/db.js');
   const { COOKIE_NAME } = await import('../shared/const.js');
-  const connection = postgres(url.toString(), {max:4});
+  const connection = new Pool({connectionString:url.toString(),max:4});
   const database = drizzle(connection, {schema});
   const userIds: number[] = [];
   const propertyIds: number[] = [];

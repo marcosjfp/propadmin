@@ -6,13 +6,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { passwordSchema, idSchema, dateFilterSchema } from '../shared/validation.js';
-import { databaseOptions } from '../server/database-options.js';
+import { databaseOptions, runtimeDatabaseOptions } from '../server/database-options.js';
 import { assertProductionConfig } from '../server/config.js';
 import { normalizeImage } from '../server/storage.js';
 
 process.env.JWT_SECRET ||= 'unit-test-secret-do-not-use-outside-tests';
 const {appRouter}=await import('../server/routers/index.js');
-const {migrate}=await import('../scripts/migrations.js');
+const {migrate,migrationFiles}=await import('../scripts/migrations.js');
 const {incrementRate}=await import('../server/rate-limits.js');
 const enabled=process.env.RUN_DATABASE_TESTS==='1';
 
@@ -34,12 +34,21 @@ test('production configuration rejects insecure or incomplete settings',()=>{
   assert.throws(()=>assertProductionConfig({...env,DATABASE_URL:'postgresql://test:test@database.example/test?sslmode=require'}));
 });
 
-test('database connections disable pipelining and preserve verified TLS with a configured CA',()=>{
+test('administrative database connections preserve verified TLS with a configured CA',()=>{
   assert.equal(databaseOptions({NODE_ENV:'production'}).ssl,'verify-full');
   assert.equal(databaseOptions().max_pipeline,1);
   const pem='-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----';
   assert.deepEqual(databaseOptions({DATABASE_SSL_CA:pem.replaceAll('\n','\\n')}).ssl,{ca:pem,rejectUnauthorized:true});
   assert.throws(()=>databaseOptions({DATABASE_SSL_CA:'not-a-certificate'}));
+});
+
+test('runtime database TLS keeps the provider CA and removes URL options that would override it',()=>{
+  const ca='-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----';
+  const options=runtimeDatabaseOptions({NODE_ENV:'production',DATABASE_URL:'postgresql://fixture:fixture@database.example/postgres?sslmode=verify-full&application_name=fixture',DATABASE_SSL_CA:ca});
+  assert.deepEqual(options.ssl,{ca,rejectUnauthorized:true});
+  assert.equal(new URL(options.connectionString).searchParams.has('sslmode'),false);
+  assert.equal(new URL(options.connectionString).searchParams.get('application_name'),'fixture');
+  assert.equal(runtimeDatabaseOptions({DATABASE_URL:'postgresql://localhost/local'}).ssl,undefined);
 });
 
 test('image decoder rejects MIME spoofing and creates bounded WebP derivatives',async ()=>{
@@ -55,14 +64,16 @@ test('production database: clean migration, legacy redaction, archive retention,
   const url=new URL(process.env.DATABASE_URL!);
   assert.ok(['localhost','127.0.0.1','[::1]'].includes(url.hostname));
   const {default:postgres}=await import('postgres');
-  const {drizzle}=await import('drizzle-orm/postgres-js');
+  const {drizzle}=await import('drizzle-orm/node-postgres');
+  const {Pool}=await import('pg');
   const {eq}=await import('drizzle-orm');
   const schema=await import('../drizzle/schema.js');
   const namespace=`production_test_${randomUUID().replaceAll('-','')}`;
   const root=postgres(url.toString(),{max:1,onnotice:()=>{}});
   await root`CREATE SCHEMA ${root(namespace)}`;
   const connection=postgres(url.toString(),{max:6,connection:{search_path:namespace},onnotice:()=>{}});
-  const database=drizzle(connection,{schema});
+  const runtimeConnection=new Pool({connectionString:url.toString(),max:6,options:`-c search_path=${namespace}`});
+  const database=drizzle(runtimeConnection,{schema});
   const originalStorage=process.env.LOCAL_STORAGE_PATH;
   const directory=await mkdtemp(path.join(tmpdir(),'propadmin-images-'));
   process.env.LOCAL_STORAGE_PATH=directory;
@@ -74,9 +85,28 @@ test('production database: clean migration, legacy redaction, archive retention,
       const clean=postgres(url.toString(),{max:1,connection:{search_path:fresh},onnotice:()=>{}});
       try {
         await migrate(clean);
-        assert.equal((await clean`SELECT * FROM propadmin_migrations`).length,2);
+        assert.equal((await clean`SELECT * FROM propadmin_migrations`).length,migrationFiles.length);
         assert.equal((await clean`SELECT * FROM users`).length,0);
         assert.equal((await clean`SELECT * FROM rate_limits`).length,0);
+        const visitor=`rls_visitor_${randomUUID().replaceAll('-','')}`;
+        await root`CREATE ROLE ${root(visitor)} NOLOGIN`;
+        try {
+          await root`GRANT USAGE ON SCHEMA ${root(fresh)} TO ${root(visitor)}`;
+          await clean`GRANT SELECT,INSERT ON TABLE rate_limits,propadmin_migrations TO ${clean(visitor)}`;
+          await clean`INSERT INTO rate_limits (key,hits,"expiresAt") VALUES ('private-counter',1,now()+interval '1 minute')`;
+          await clean.begin(async tx=>{
+            await tx`SET LOCAL ROLE ${tx(visitor)}`;
+            assert.equal((await tx`SELECT * FROM rate_limits`).length,0);
+            assert.equal((await tx`SELECT * FROM propadmin_migrations`).length,0);
+          });
+          await assert.rejects(clean.begin(async tx=>{
+            await tx`SET LOCAL ROLE ${tx(visitor)}`;
+            await tx`INSERT INTO rate_limits (key,hits,"expiresAt") VALUES ('forbidden-counter',1,now())`;
+          }),{code:'42501'});
+        } finally {
+          await root`DROP OWNED BY ${root(visitor)}`;
+          await root`DROP ROLE ${root(visitor)}`;
+        }
       } finally {await clean.end();await root`DROP SCHEMA ${root(fresh)} CASCADE`;}
     });
     await t.test('legacy bootstrap upgrades redact credentials and are repeatable',async ()=>{
@@ -87,7 +117,7 @@ test('production database: clean migration, legacy redaction, archive retention,
       const [snapshot]=await connection`SELECT "previousValue","newValue" FROM audit_logs`;
       assert.deepEqual(JSON.parse(snapshot.previousValue),{nested:{},name:'Keep'});
       assert.equal(snapshot.newValue,'[credential snapshot redacted]');
-      assert.equal((await connection`SELECT * FROM propadmin_migrations`).length,2);
+      assert.equal((await connection`SELECT * FROM propadmin_migrations`).length,migrationFiles.length);
     });
     const [admin]=await database.insert(schema.users).values({openId:randomUUID(),username:'test-admin',name:'Admin',role:'admin',status:'active'}).returning();
     const [agent]=await database.insert(schema.users).values({openId:randomUUID(),username:'test-agent',name:'Agent',role:'agent',status:'active'}).returning();
@@ -181,6 +211,7 @@ test('production database: clean migration, legacy redaction, archive retention,
       await assert.rejects(connection`DELETE FROM users WHERE id=${agent.id}`);
     });
   } finally {
+    await runtimeConnection.end();
     await connection.end();
     await root`DROP SCHEMA ${root(namespace)} CASCADE`;
     await root.end();

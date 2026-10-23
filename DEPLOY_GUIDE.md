@@ -1,10 +1,10 @@
 # PropAdmin: Vercel + Supabase deployment and recovery
 
-Checked against this repository and official documentation on 10 October 2026. Application URL: https://propadmin-lac.vercel.app.
+Checked against this repository and official documentation on 23 October 2026. Application URL: https://propadmin-lac.vercel.app.
 
 ## Confirmed live failure and recommendation
 
-The public login page returns HTTP 200, but `/api/health` and `/api/trpc/auth.me` return HTTP 500 with `FUNCTION_INVOCATION_FAILED`. The supplied Vercel log identifies the immediate cause:
+At the initial failure, the public login page returned HTTP 200, but `/api/health` and `/api/trpc/auth.me` returned HTTP 500 with `FUNCTION_INVOCATION_FAILED`. The supplied Vercel log identifies the immediate cause:
 
 ```text
 ERR_MODULE_NOT_FOUND: Cannot find module '/var/task/server/trpc'
@@ -15,7 +15,7 @@ The auth router used extensionless relative imports. Local `tsx` accepted them; 
 
 **Keep Vercel + Supabase for this recovery.** Switching PostgreSQL providers cannot resolve a JavaScript module-loading error. Neon is a viable database alternative with [pooled connections](https://neon.com/blog/pgbouncer-the-one-with-prepared-statements), but this code also needs Supabase Storage; a Neon migration would introduce database/data migration work and retain a storage provider. Reconsider only after the current deployment works and there is a specific database requirement.
 
-The corrected code must reach the GitHub repository used by Vercel before it can change the live application. Remote configuration and migrations must be ready before the production push. No remote database, credentials, project settings or deployment have been changed by this local preparation.
+The corrected code must reach the GitHub repository used by Vercel before it can change the live application. Remote configuration and migrations must be ready before the production push. The initial local preparation was followed by production recovery on 23 October 2026; see the recovery notes below.
 
 Follow the numbered stages below in order. Commands run in **Terminal on your Mac**, SQL runs in **Supabase SQL Editor**, and dashboard settings are changed in the named service. Replace uppercase placeholders with your actual values; never paste passwords, keys or complete connection URLs into chat.
 
@@ -27,6 +27,14 @@ Prepared locally for this recovery:
 - Local integration tests and the local test administrator. The local account is separate from Supabase production.
 
 A local Git commit alone does not publish anything. Pushing `main` can start a Vercel production deployment, so do that at stage 9.
+
+## Recovery changes on 23 October 2026
+
+- The paused Supabase project was resumed and production environment variables were corrected, including `NODE_ENV` and the official database CA.
+- Runtime database access now uses node-postgres with `attachDatabasePool`, Fluid Compute and a bounded pool in the database's Frankfurt region.
+- Supabase's [current postgres-js guidance](https://supabase.com/docs/guides/database/postgres-js) warns that its pipelining can hang shared transaction-pooler queries. `max_pipeline: 1` is not a reliable workaround; administrative postgres-js scripts therefore stay on the session pooler.
+- The third migration enables RLS and removes browser-role grants from backend-owned tables. Application requests still go through the custom authenticated API.
+- The first production administrator uses username `admin` and email `admin@propadmin.com`. Its generated password is saved only in the ignored owner-only `tmp/production-admin.json`; do not commit that file.
 
 ## 1. Open the correct repository and verify local preparation
 
@@ -94,7 +102,7 @@ Append `?sslmode=verify-full`, or `&sslmode=verify-full` if the copied URL alrea
 postgresql://postgres.PROJECT_REF:ENCODED_DB_PASSWORD@COPIED_POOLER_HOST:6543/postgres?sslmode=verify-full
 ```
 
-The [transaction pooler is intended for serverless traffic](https://supabase.com/docs/guides/database/connecting-to-postgres). This app disables prepared statements and query pipelining. Administrative image conversion uses a session-level advisory lock, so its connection must preserve a session. Shared poolers provide an [IPv4-compatible route](https://supabase.com/docs/guides/troubleshooting/supabase--your-network-ipv4-and-ipv6-compatibility-cHe3BP); a direct `db.PROJECT_REF.supabase.co` URL may have different network requirements.
+The [transaction pooler is intended for serverless traffic](https://supabase.com/docs/guides/database/connecting-to-postgres). The runtime uses node-postgres with unnamed queries, a bounded connection pool, verified TLS and Vercel pool lifecycle management. Administrative scripts retain postgres-js on the session pooler. Administrative image conversion uses a session-level advisory lock, so its connection must preserve a session. Shared poolers provide an [IPv4-compatible route](https://supabase.com/docs/guides/troubleshooting/supabase--your-network-ipv4-and-ipv6-compatibility-cHe3BP); a direct `db.PROJECT_REF.supabase.co` URL may have different network requirements.
 
 For a certificate verification failure, download the official database root certificate from Supabase Database settings. Put the complete PEM certificate into the optional `DATABASE_SSL_CA` environment variable. The application and administrative scripts accept real line breaks or escaped `\n`. Certificate verification remains enabled. This support avoids depending on a certificate-file path inside Vercel's function bundle.
 
@@ -228,7 +236,7 @@ cd /Users/marcosfp/Development/propadmin
 node --env-file=.env.production.local --import tsx scripts/migrate.ts
 ```
 
-Expected first-run output names `0007_supabase_postgres.sql` and `0008_production_hardening.sql`. Existing bootstrap tables are retained. The runner records checksums and executes migrations transactionally. A later run with identical files applies nothing.
+Expected first-run output names `0007_supabase_postgres.sql`, `0008_production_hardening.sql` and `20261023142358_protect_internal_tables.sql`. Existing bootstrap tables are retained. The runner records checksums and executes migrations transactionally. A later run with identical files applies nothing.
 
 If migration finds multiple pending/paid commissions for one property, it aborts. Reconcile those financial records before retrying; do not delete migration checksums or alter applied migration files to bypass the check.
 
@@ -252,7 +260,7 @@ FROM public.property_images
 WHERE "storageKey" IS NULL;
 ```
 
-**Check:** Two migration rows exist and `legacy_images_remaining` is zero. Apply the Data API/RLS decision in stage 4 to the resulting tables.
+**Check:** All three migration rows exist and `legacy_images_remaining` is zero. Apply the Data API/RLS decision in stage 4 to the resulting tables.
 
 ## 9. Push the corrected commit and wait for Vercel
 
@@ -379,6 +387,7 @@ In your browser, use the production origin `https://propadmin-lac.vercel.app` co
 | `Tenant or user not found` | Recopy the complete pooler URL, including project reference in the username and actual hostname. |
 | Certificate-chain/self-signed certificate error | Supply the official CA PEM through `DATABASE_SSL_CA`; retain verified TLS. |
 | `relation ... does not exist` / missing `deletedAt` or `rate_limits` | Migrations did not run on the database used by this deployment. |
+| Dashboard loads but stays on loading / queries hang | Confirm the runtime uses node-postgres with Fluid Compute pool lifecycle management; postgres-js pipelining can hang the shared transaction pooler. |
 | Login says pending/rejected | Check the account in `public.users`, not Supabase Auth, and complete administrator approval/bootstrap. |
 | Mutations return 403 but reads work | Compare request origin with `CLIENT_URL`; the app intentionally rejects mismatches/missing Origin. |
 | Upload fails; other API works | Check same-project server key, private bucket name, MIME/file limits and API logs for decoder/storage errors. |

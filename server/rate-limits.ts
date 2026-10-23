@@ -17,7 +17,7 @@ export async function incrementRate(database:Database, key:string, windowMs:numb
   `);
   // Bounded cleanup prevents arbitrary usernames/IPs leaving an unbounded table.
   await database.execute(sql`DELETE FROM rate_limits WHERE key IN (SELECT key FROM rate_limits WHERE "expiresAt" < now() LIMIT 100)`);
-  return {totalHits:Number(result[0].hits),resetTime:new Date(result[0].expiresAt as string)};
+  return {totalHits:Number(result.rows[0].hits),resetTime:new Date(result.rows[0].expiresAt as string)};
 }
 export async function enforceRate(database:Database, namespace:string, value:string, limit:number, windowMs:number) {
   const record = await incrementRate(database,rateKey(namespace,value),windowMs);

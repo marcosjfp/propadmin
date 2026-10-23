@@ -20,7 +20,7 @@ The confirmed application issues below were repaired and checked locally. Remote
 ## Validation
 
 - Root strict TypeScript check, client TypeScript/build and zero-warning ESLint pass.
-- All 23 tests pass with local PostgreSQL: fresh/repeated/legacy migrations, recursive historical redaction, session revocation, role boundaries, aggregate pagination, administrator races, approval races, commission lifecycle and beneficiary rounding, concurrent image operations and shared rate counters. HTTP tests also start a real server and verify cookies, signed uploads, idempotent completion, WebP reads and pending-image privacy.
+- All 24 tests pass with local PostgreSQL: fresh/repeated/legacy migrations, recursive historical redaction, session revocation, role boundaries, aggregate pagination, administrator races, approval races, commission lifecycle and beneficiary rounding, concurrent image operations and shared rate counters. HTTP tests also start a real server and verify cookies, a five-query administrator dashboard batch, signed uploads, idempotent completion, WebP reads and pending-image privacy. Migration tests prove that an unprivileged role cannot read or insert into backend-only tables.
 - Browser smoke checks cover real sign-in, authenticated dashboard, property management/form and smaller-screen layout. These are manual smoke checks, not a comprehensive browser automation suite.
 - The build has no chunk-size warning: largest JavaScript chunk is approximately 135 KB before gzip, compared with roughly 567 KB before route splitting.
 - Dependency audit reports zero known advisories in the resolved lockfile. Frozen-lockfile installation passes.
@@ -35,3 +35,7 @@ Further improvements beyond these repairs include a full browser regression suit
 ## Live deployment follow-up
 
 The supplied Vercel log confirmed `ERR_MODULE_NOT_FOUND` from extensionless relative imports in the auth router. Those imports and the schema-relations import now use `.js`, backend resolution uses NodeNext, and every production build compiles and loads the server through native Node ESM. Local `tsx` tests had not exposed this deployment-specific failure. The detailed deployment guide now separates runtime transaction pooling from administrative session pooling and supports optional provider CA PEM configuration. The live deployment still needs the corrected commit and environment/migrations; no remote changes were made here.
+
+## Production recovery on 23 October 2026
+
+Resumed the paused Supabase project and corrected production configuration, including the `NODE_ENV` typo and verified database CA. Live verification exposed a second issue after startup: postgres-js pipelining could stall dashboard queries through the shared transaction pooler. The runtime now uses node-postgres and Vercel's pool lifecycle helper, with bounded connections and query timeouts; administrative scripts retain session pooling. Added the backend-table RLS migration and regression checks for batched dashboard requests and unprivileged database access. The first production administrator was bootstrapped through the real signup flow and an audited owner-only activation; credentials remain in an ignored private file.

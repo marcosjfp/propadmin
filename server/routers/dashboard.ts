@@ -15,7 +15,7 @@ export const dashboardRouter = router({
         (SELECT coalesce(sum("commissionAmount"),0)::text FROM commissions WHERE status = 'pendente') AS "pendingCommissions",
         (SELECT coalesce(sum("commissionAmount"),0)::text FROM commissions WHERE status = 'paga') AS "paidCommissions"
     `);
-    const row = rows[0];
+    const row = rows.rows[0];
     return {
       totalUsers:Number(row.totalUsers),totalAgents:Number(row.totalAgents),totalProperties:Number(row.totalProperties),activeProperties:Number(row.activeProperties),
       totalCommissions:Number(row.totalCommissions),pendingCommissions:Number(row.pendingCommissions),paidCommissions:Number(row.paidCommissions),

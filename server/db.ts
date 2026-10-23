@@ -1,30 +1,21 @@
-import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import pg from 'pg';
+import { attachDatabasePool } from '@vercel/functions';
 import * as schema from '../drizzle/schema.js';
-import { databaseOptions } from './database-options.js';
-
-// Build DATABASE_URL from individual variables or use the full URL
-function getDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error('DATABASE_URL is required. Set the Supabase Postgres connection string in Vercel.');
-  }
-  return url;
-}
+import { runtimeDatabaseOptions } from './database-options.js';
 
 // Lazy pool creation to prevent crash on startup
-let client: postgres.Sql | null = null;
-export type Database = PostgresJsDatabase<typeof schema>;
+let client: pg.Pool | null = null;
+export type Database = NodePgDatabase<typeof schema>;
 let dbInstance: Database | null = null;
 
-function getClient(): postgres.Sql {
+function getClient(): pg.Pool {
   if (!client) {
-    client = postgres(getDatabaseUrl(), {
-      max: 1,
-      connect_timeout: 10,
-      idle_timeout: 20,
-      ...databaseOptions(),
+    client = new pg.Pool(runtimeDatabaseOptions());
+    client.on('error', error => {
+      console.error('Idle database connection failed:', (error as Error & {code?:string}).code || error.name);
     });
+    if (process.env.VERCEL) attachDatabasePool(client);
   }
   return client;
 }
@@ -50,7 +41,7 @@ export { getClient as pool };
 // Test database connection with timeout
 export async function testConnection(): Promise<boolean> {
   try {
-    await getClient()`SELECT 1`;
+    await getClient().query('SELECT 1');
     return true;
   } catch (error) {
     console.error('Database connection failed:', error);

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import type postgres from 'postgres';
 
-export const migrationFiles = ['0007_supabase_postgres.sql', '0008_production_hardening.sql'] as const;
+export const migrationFiles = ['0007_supabase_postgres.sql', '0008_production_hardening.sql', '20261023142358_protect_internal_tables.sql'] as const;
 
 export async function migrate(sql: postgres.Sql) {
   await sql.begin(async tx => {

@@ -58,6 +58,14 @@ test('HTTP: real session, signed upload completion, thumbnail privacy and disabl
     const me=await fetch(`${base}/api/trpc/auth.me`,{headers:{Cookie:cookie}});
     assert.equal(me.status,200);
     assert.ok(!(await me.text()).includes('passwordHash'));
+    const batchRoutes=['users.list','dashboard.stats','dashboard.agents','users.listAgents','commissions.list'];
+    const batchInput={0:superjson.serialize({page:1,pageSize:20}),1:superjson.serialize(undefined),2:superjson.serialize({page:1,pageSize:20}),3:superjson.serialize(undefined),4:superjson.serialize(undefined)};
+    const batch=await fetch(`${base}/api/trpc/${batchRoutes.join(',')}?batch=1&input=${encodeURIComponent(JSON.stringify(batchInput))}`,{headers:{Cookie:cookie},signal:AbortSignal.timeout(5000)});
+    assert.equal(batch.status,200,'All administrator dashboard queries must complete in one HTTP batch');
+    const batchResults=await batch.json();
+    assert.equal(batchResults.length,5);
+    assert.ok(batchResults.every((result:any)=>result.result && !result.error));
+
     assert.equal((await fetch(`${base}/api/dev-login?role=admin`)).status,403);
     const property=await mutation('properties.create',{title:'HTTP image fixture',type:'casa',transactionType:'venda',price:100000,size:10,rooms:1,bathrooms:1,hasBackyard:false,hasLivingRoom:true,hasKitchen:true,address:'Fixture',city:'Fixture',state:'SP'});
     propertyId=property.id;
